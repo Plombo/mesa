@@ -25,7 +25,8 @@ C_SOURCES = \
 	nv50_pc_optimize.c \
 	nv50_pc_regalloc.c \
 	nv50_push.c \
-	nv50_query.c
+	nv50_query.c \
+	nv50_video_context.c
 
 LIBRARY_INCLUDES = \
 	$(LIBDRM_CFLAGS)
