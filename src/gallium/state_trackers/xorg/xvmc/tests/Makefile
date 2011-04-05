@@ -2,6 +2,7 @@ TOP = ../../../../../..
 include $(TOP)/configs/current
 
 LIBS = -lXvMCW -lXvMC -lXv -lX11
+LDFLAGS+=-pthread
 
 #############################################
 
