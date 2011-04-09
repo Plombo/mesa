@@ -39,8 +39,9 @@ vlVdpVideoMixerCreate(VdpDevice device,
                       void const *const *parameter_values,
                       VdpVideoMixer *mixer)
 {
-   VdpStatus ret;
    vlVdpVideoMixer *vmixer = NULL;
+   struct pipe_video_context *context;
+   VdpStatus ret;
 
    debug_printf("[VDPAU] Creating VideoMixer\n");
 
@@ -48,11 +49,15 @@ vlVdpVideoMixerCreate(VdpDevice device,
    if (!dev)
       return VDP_STATUS_INVALID_HANDLE;
 
+   context = dev->context->vpipe;
+
    vmixer = CALLOC(1, sizeof(vlVdpVideoMixer));
    if (!vmixer)
       return VDP_STATUS_RESOURCES;
 
    vmixer->device = dev;
+   vmixer->compositor = context->create_compositor(context);
+
    /*
     * TODO: Handle features and parameters
     * */
@@ -106,11 +111,28 @@ VdpStatus vlVdpVideoMixerRender(VdpVideoMixer mixer,
                                 uint32_t layer_count,
                                 VdpLayer const *layers)
 {
-   if (!(background_source_rect && video_surface_past && video_surface_future &&
-         video_source_rect && destination_rect && destination_video_rect && layers))
-      return VDP_STATUS_INVALID_POINTER;
+   vlVdpVideoMixer *vmixer;
+   vlVdpSurface *surf;
+   vlVdpOutputSurface *dst;
 
-   return VDP_STATUS_NO_IMPLEMENTATION;
+   vmixer = vlGetDataHTAB(mixer);
+   if (!vmixer)
+      return VDP_STATUS_INVALID_HANDLE;
+
+   surf = vlGetDataHTAB(video_surface_current);
+   if (!surf)
+      return VDP_STATUS_INVALID_HANDLE;
+
+   dst = vlGetDataHTAB(destination_surface);
+   if (!dst)
+      return VDP_STATUS_INVALID_HANDLE;
+
+   vmixer->compositor->clear_layers(vmixer->compositor);
+   vmixer->compositor->set_buffer_layer(vmixer->compositor, 0, surf->video_buffer, NULL, NULL);
+   vmixer->compositor->render_picture(vmixer->compositor, PIPE_MPEG12_PICTURE_TYPE_FRAME,
+                                      dst->surface, NULL, NULL);
+
+   return VDP_STATUS_OK;
 }
 
 VdpStatus
