@@ -25,6 +25,7 @@
 
 #include "nv50_context.h"
 #include "nv50_screen.h"
+#include "nv50_video_context.h"
 
 #include "nouveau/nv_object.xml.h"
 
@@ -309,6 +310,7 @@ nv50_screen_create(struct pipe_winsys *ws, struct nouveau_device *dev)
    pscreen->get_param = nv50_screen_get_param;
    pscreen->get_shader_param = nv50_screen_get_shader_param;
    pscreen->get_paramf = nv50_screen_get_paramf;
+   pscreen->video_context_create = nv50_video_create;
 
    nv50_screen_init_resource_functions(pscreen);
 

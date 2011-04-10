@@ -25,20 +25,12 @@
  *
  **************************************************************************/
 
-#include "nvfx_video_context.h"
-#include "util/u_video.h"
-#include <vl/vl_context.h>
+#ifndef __NV50_VIDEO_CONTEXT_H__
+#define __NV50_VIDEO_CONTEXT_H__
+
+#include <pipe/p_video_context.h>
 
 struct pipe_video_context *
-nvfx_video_create(struct pipe_screen *screen, void *priv)
-{
-   struct pipe_context *pipe;
+nv50_video_create(struct pipe_screen *screen, void *priv);
 
-   assert(screen);
-
-   pipe = screen->context_create(screen, priv);
-   if (!pipe)
-      return NULL;
-
-   return vl_create_context(pipe, true);
-}
+#endif

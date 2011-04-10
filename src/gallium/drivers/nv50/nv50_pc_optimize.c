@@ -985,6 +985,11 @@ nv_pass_flatten(struct nv_pass *ctx, struct nv_basic_block *b)
       }
 
       if (!nvi && n0 < 12 && n1 < 12) { /* 12 as arbitrary limit */
+         /* free any no-op instructions such as UNDEF at the end of the block */
+         assert(b->exit);
+         while(nvi_isnop(b->exit))
+            nv_nvi_delete(b->exit);
+         
          assert(b->exit && b->exit->flags_src);
          pred = b->exit->flags_src->value;
 

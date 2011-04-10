@@ -1,6 +1,6 @@
 /**************************************************************************
  *
- * Copyright 2009 Younes Manton.
+ * Copyright 2010 Christian König
  * All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -25,12 +25,12 @@
  *
  **************************************************************************/
 
-#include "nvfx_video_context.h"
+#include "nv50_video_context.h"
 #include "util/u_video.h"
 #include <vl/vl_context.h>
 
 struct pipe_video_context *
-nvfx_video_create(struct pipe_screen *screen, void *priv)
+nv50_video_create(struct pipe_screen *screen, void *priv)
 {
    struct pipe_context *pipe;
 
@@ -40,5 +40,5 @@ nvfx_video_create(struct pipe_screen *screen, void *priv)
    if (!pipe)
       return NULL;
 
-   return vl_create_context(pipe, true);
+   return vl_create_context(pipe, false);
 }
