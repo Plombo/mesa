@@ -365,8 +365,8 @@ init_pipe_state(struct vl_mpeg12_mc_renderer *r)
    filters[0] = PIPE_TEX_FILTER_NEAREST;
 
    /* Fwd, bkwd ref filters */
-   filters[1] = PIPE_TEX_FILTER_LINEAR;
-   filters[2] = PIPE_TEX_FILTER_LINEAR;
+   filters[1] = PIPE_TEX_FILTER_NEAREST;
+   filters[2] = PIPE_TEX_FILTER_NEAREST;
 
    for (i = 0; i < 3; ++i) {
       memset(&sampler, 0, sizeof(sampler));
