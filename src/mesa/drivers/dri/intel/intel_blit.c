@@ -211,7 +211,7 @@ intelClearWithBlit(struct gl_context *ctx, GLbitfield mask)
 {
    struct intel_context *intel = intel_context(ctx);
    struct gl_framebuffer *fb = ctx->DrawBuffer;
-   GLuint clear_depth;
+   GLuint clear_depth_value, clear_depth_mask;
    GLboolean all;
    GLint cx, cy, cw, ch;
    GLbitfield fail_mask = 0;
@@ -220,12 +220,15 @@ intelClearWithBlit(struct gl_context *ctx, GLbitfield mask)
    /*
     * Compute values for clearing the buffers.
     */
-   clear_depth = 0;
+   clear_depth_value = 0;
+   clear_depth_mask = 0;
    if (mask & BUFFER_BIT_DEPTH) {
-      clear_depth = (GLuint) (fb->_DepthMax * ctx->Depth.Clear);
+      clear_depth_value = (GLuint) (fb->_DepthMax * ctx->Depth.Clear);
+      clear_depth_mask = XY_BLT_WRITE_RGB;
    }
    if (mask & BUFFER_BIT_STENCIL) {
-      clear_depth |= (ctx->Stencil.Clear & 0xff) << 24;
+      clear_depth_value |= (ctx->Stencil.Clear & 0xff) << 24;
+      clear_depth_mask |= XY_BLT_WRITE_ALPHA;
    }
 
    cx = fb->_Xmin;
@@ -239,12 +242,13 @@ intelClearWithBlit(struct gl_context *ctx, GLbitfield mask)
    if (cw == 0 || ch == 0)
       return 0;
 
-   GLuint buf;
    all = (cw == fb->Width && ch == fb->Height);
 
    /* Loop over all renderbuffers */
-   for (buf = 0; buf < BUFFER_COUNT && mask; buf++) {
-      const GLbitfield bufBit = 1 << buf;
+   mask &= (1 << BUFFER_COUNT) - 1;
+   while (mask) {
+      GLuint buf = _mesa_ffs(mask) - 1;
+      GLboolean is_depth_stencil = buf == BUFFER_DEPTH || buf == BUFFER_STENCIL;
       struct intel_renderbuffer *irb;
       drm_intel_bo *write_buffer;
       int x1, y1, x2, y2;
@@ -253,11 +257,15 @@ intelClearWithBlit(struct gl_context *ctx, GLbitfield mask)
       int pitch, cpp;
       drm_intel_bo *aper_array[2];
 
-      if (!(mask & bufBit))
-	 continue;
+      mask &= ~(1 << buf);
+
+      irb = intel_get_renderbuffer(fb, buf);
+      if (irb == NULL || irb->region == NULL || irb->region->buffer == NULL) {
+         fail_mask |= 1 << buf;
+         continue;
+      }
 
       /* OK, clear this renderbuffer */
-      irb = intel_get_renderbuffer(fb, buf);
       write_buffer = intel_region_buffer(intel, irb->region,
 					 all ? INTEL_WRITE_FULL :
 					 INTEL_WRITE_PART);
@@ -279,11 +287,8 @@ intelClearWithBlit(struct gl_context *ctx, GLbitfield mask)
 
       /* Setup the blit command */
       if (cpp == 4) {
-	 if (buf == BUFFER_DEPTH || buf == BUFFER_STENCIL) {
-	    if (mask & BUFFER_BIT_DEPTH)
-	       CMD |= XY_BLT_WRITE_RGB;
-	    if (mask & BUFFER_BIT_STENCIL)
-	       CMD |= XY_BLT_WRITE_ALPHA;
+	 if (is_depth_stencil) {
+	    CMD |= clear_depth_mask;
 	 } else {
 	    /* clearing RGBA */
 	    CMD |= XY_BLT_WRITE_ALPHA | XY_BLT_WRITE_RGB;
@@ -300,8 +305,8 @@ intelClearWithBlit(struct gl_context *ctx, GLbitfield mask)
 #endif
       BR13 |= (pitch * cpp);
 
-      if (buf == BUFFER_DEPTH || buf == BUFFER_STENCIL) {
-	 clear_val = clear_depth;
+      if (is_depth_stencil) {
+	 clear_val = clear_depth_value;
       } else {
 	 uint8_t clear[4];
 	 GLclampf *color = ctx->Color.ClearColor;
@@ -333,8 +338,7 @@ intelClearWithBlit(struct gl_context *ctx, GLbitfield mask)
 					clear[3], clear[3]);
 	    break;
 	 default:
-	    fail_mask |= bufBit;
-	    mask &= ~bufBit;
+	    fail_mask |= 1 << buf;
 	    continue;
 	 }
       }
@@ -367,8 +371,6 @@ intelClearWithBlit(struct gl_context *ctx, GLbitfield mask)
 
       if (buf == BUFFER_DEPTH || buf == BUFFER_STENCIL)
 	 mask &= ~(BUFFER_BIT_DEPTH | BUFFER_BIT_STENCIL);
-      else
-	 mask &= ~bufBit;    /* turn off bit, for faster loop exit */
    }
 
    return fail_mask;

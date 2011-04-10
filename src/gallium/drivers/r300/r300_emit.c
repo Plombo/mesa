@@ -387,8 +387,7 @@ void r300_emit_fb_state(struct r300_context* r300, unsigned size, void* state)
     if (r300->screen->caps.is_r500) {
         rb3d_cctl = R300_RB3D_CCTL_INDEPENDENT_COLORFORMAT_ENABLE_ENABLE;
     }
-    if (fb->nr_cbufs &&
-        r300_fragment_shader_writes_all(r300_fs(r300))) {
+    if (fb->nr_cbufs && r300->fb_multiwrite) {
         rb3d_cctl |= R300_RB3D_CCTL_NUM_MULTIWRITES(fb->nr_cbufs);
     }
 
@@ -483,7 +482,7 @@ void r300_emit_fb_state_pipelined(struct r300_context *r300,
 
     /* If we use the multiwrite feature, the colorbuffers 2,3,4 must be
      * marked as UNUSED in the US block. */
-    if (r300_fragment_shader_writes_all(r300_fs(r300))) {
+    if (r300->fb_multiwrite) {
         num_cbufs = MIN2(num_cbufs, 1);
     }
 
@@ -494,6 +493,11 @@ void r300_emit_fb_state_pipelined(struct r300_context *r300,
     OUT_CS_REG_SEQ(R300_US_OUT_FMT_0, 4);
     for (i = 0; i < num_cbufs; i++) {
         OUT_CS(r300_surface(fb->cbufs[i])->format);
+    }
+    for (; i < 1; i++) {
+        OUT_CS(R300_US_OUT_FMT_C4_8 |
+               R300_C0_SEL_B | R300_C1_SEL_G |
+               R300_C2_SEL_R | R300_C3_SEL_A);
     }
     for (; i < 4; i++) {
         OUT_CS(R300_US_OUT_FMT_UNUSED);
@@ -771,6 +775,7 @@ void r300_emit_textures_state(struct r300_context *r300,
     struct r300_texture_sampler_state *texstate;
     struct r300_resource *tex;
     unsigned i;
+    boolean has_us_format = r300->screen->caps.has_us_format;
     CS_LOCALS(r300);
 
     BEGIN_CS(size);
@@ -792,6 +797,11 @@ void r300_emit_textures_state(struct r300_context *r300,
 
             OUT_CS_REG(R300_TX_OFFSET_0 + (i * 4), texstate->format.tile_config);
             OUT_CS_RELOC(tex);
+
+            if (has_us_format) {
+                OUT_CS_REG(R500_US_FORMAT0_0 + (i * 4),
+                           texstate->format.us_format0);
+            }
         }
     }
     END_CS;

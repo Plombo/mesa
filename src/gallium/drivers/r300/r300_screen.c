@@ -114,9 +114,12 @@ static int r300_get_param(struct pipe_screen* pscreen, enum pipe_cap param)
         case PIPE_CAP_TEXTURE_MIRROR_REPEAT:
         case PIPE_CAP_BLEND_EQUATION_SEPARATE:
         case PIPE_CAP_VERTEX_ELEMENT_INSTANCE_DIVISOR:
+        case PIPE_CAP_FRAGMENT_COLOR_CLAMP_CONTROL:
             return 1;
         case PIPE_CAP_TEXTURE_SWIZZLE:
             return util_format_s3tc_enabled ? r300screen->caps.dxtc_swizzle : 1;
+        case PIPE_CAP_MIXED_COLORBUFFER_FORMATS:
+            return is_r500 ? 1 : 0;
 
         /* Unsupported features (boolean caps). */
         case PIPE_CAP_TIMER_QUERY:
@@ -209,7 +212,7 @@ static int r300_get_shader_param(struct pipe_screen *pscreen, unsigned shader, e
         case PIPE_SHADER_CAP_MAX_PREDS:
             return is_r500 ? 1 : 0;
         case PIPE_SHADER_CAP_TGSI_CONT_SUPPORTED:
-            return 1;
+            return 0;
         case PIPE_SHADER_CAP_INDIRECT_INPUT_ADDR:
         case PIPE_SHADER_CAP_INDIRECT_OUTPUT_ADDR:
         case PIPE_SHADER_CAP_INDIRECT_TEMP_ADDR:
@@ -247,7 +250,7 @@ static int r300_get_shader_param(struct pipe_screen *pscreen, unsigned shader, e
         case PIPE_SHADER_CAP_MAX_PREDS:
             return is_r500 ? 4 : 0; /* XXX guessed. */
         case PIPE_SHADER_CAP_TGSI_CONT_SUPPORTED:
-            return 1;
+            return 0;
         case PIPE_SHADER_CAP_INDIRECT_INPUT_ADDR:
         case PIPE_SHADER_CAP_INDIRECT_OUTPUT_ADDR:
         case PIPE_SHADER_CAP_INDIRECT_TEMP_ADDR:
@@ -325,8 +328,9 @@ static boolean r300_is_format_supported(struct pipe_screen* screen,
                        format == PIPE_FORMAT_RGTC2_SNORM ||
                        format == PIPE_FORMAT_LATC2_UNORM ||
                        format == PIPE_FORMAT_LATC2_SNORM;
-    boolean is_half_float = format == PIPE_FORMAT_R16_FLOAT ||
-                            format == PIPE_FORMAT_R16G16_FLOAT ||
+    boolean is_r16f_rg16f = format == PIPE_FORMAT_R16_FLOAT ||
+                            format == PIPE_FORMAT_R16G16_FLOAT;
+    boolean is_half_float = is_r16f_rg16f ||
                             format == PIPE_FORMAT_R16G16B16_FLOAT ||
                             format == PIPE_FORMAT_R16G16B16A16_FLOAT;
 
@@ -358,6 +362,8 @@ static boolean r300_is_format_supported(struct pipe_screen* screen,
         (is_r500 || !is_ati1n) &&
         /* ATI2N is supported on r4xx-r5xx. */
         (is_r400 || is_r500 || !is_ati2n) &&
+        /* R16F and RG16F texture support was added in as late as DRM 2.8.0 */
+        (drm_2_8_0 || !is_r16f_rg16f) &&
         r300_is_sampler_format_supported(format)) {
         retval |= PIPE_BIND_SAMPLER_VIEW;
     }
@@ -478,6 +484,9 @@ struct pipe_screen* r300_screen_create(struct r300_winsys_screen *rws)
         r300screen->caps.zmask_ram = 0;
     if (SCREEN_DBG_ON(r300screen, DBG_NO_HIZ))
         r300screen->caps.hiz_ram = 0;
+
+    if (!rws->get_value(rws, R300_VID_DRM_2_8_0))
+        r300screen->caps.has_us_format = FALSE;
 
     pipe_mutex_init(r300screen->num_contexts_mutex);
 

@@ -79,6 +79,7 @@ static const struct extension extension_table[] = {
    /* ARB Extensions */
    { "GL_ARB_ES2_compatibility",                   o(ARB_ES2_compatibility),                   GL,             2009 },
    { "GL_ARB_blend_func_extended",                 o(ARB_blend_func_extended),                 GL,             2009 },
+   { "GL_ARB_color_buffer_float",                  o(ARB_color_buffer_float),                  GL,             2004 },
    { "GL_ARB_copy_buffer",                         o(ARB_copy_buffer),                         GL,             2008 },
    { "GL_ARB_depth_buffer_float",                  o(ARB_depth_buffer_float),                  GL,             2008 },
    { "GL_ARB_depth_clamp",                         o(ARB_depth_clamp),                         GL,             2003 },
@@ -202,6 +203,7 @@ static const struct extension extension_table[] = {
    { "GL_EXT_texture",                             o(EXT_texture),                             GL,             1996 },
    { "GL_EXT_texture_rectangle",                   o(NV_texture_rectangle),                    GL,             2004 },
    { "GL_EXT_texture_shared_exponent",             o(EXT_texture_shared_exponent),             GL,             2004 },
+   { "GL_EXT_texture_snorm",                       o(EXT_texture_snorm),                       GL,             2009 },
    { "GL_EXT_texture_sRGB",                        o(EXT_texture_sRGB),                        GL,             2004 },
    { "GL_EXT_texture_sRGB_decode",                 o(EXT_texture_sRGB_decode),                        GL,      2006 },
    { "GL_EXT_texture_swizzle",                     o(EXT_texture_swizzle),                     GL,             2008 },
@@ -273,7 +275,7 @@ static const struct extension extension_table[] = {
    { "GL_MESA_pack_invert",                        o(MESA_pack_invert),                        GL,             2002 },
    { "GL_MESA_resize_buffers",                     o(MESA_resize_buffers),                     GL,             1999 },
    { "GL_MESA_texture_array",                      o(MESA_texture_array),                      GL,             2007 },
-   { "GL_MESA_texture_signed_rgba",                o(MESA_texture_signed_rgba),                GL,             2009 },
+   { "GL_MESA_texture_signed_rgba",                o(EXT_texture_snorm),                       GL,             2009 },
    { "GL_MESA_window_pos",                         o(ARB_window_pos),                          GL,             2000 },
    { "GL_MESAX_texture_float",                     o(ARB_texture_float),                       GL,             2009 },
    { "GL_MESA_ycbcr_texture",                      o(MESA_ycbcr_texture),                      GL,             2002 },
@@ -753,7 +755,7 @@ _mesa_extension_is_enabled( struct gl_context *ctx, const char *name )
 static char *
 get_extension_override( struct gl_context *ctx )
 {
-   const char *env_const= _mesa_getenv("MESA_EXTENSION_OVERRIDE");
+   const char *env_const = _mesa_getenv("MESA_EXTENSION_OVERRIDE");
    char *env;
    char *ext;
    char *extra_exts;
@@ -794,7 +796,7 @@ get_extension_override( struct gl_context *ctx )
    }
 
    /* Remove trailing space. */
-   len  = strlen(extra_exts);
+   len = strlen(extra_exts);
    if (extra_exts[len - 1] == ' ')
       extra_exts[len - 1] = '\0';
 
@@ -875,12 +877,24 @@ _mesa_make_extension_string(struct gl_context *ctx)
    GLboolean *base = (GLboolean *) &ctx->Extensions;
    const struct extension *i;
    unsigned j;
+   unsigned maxYear = ~0;
 
+   /* Check if the MESA_EXTENSION_MAX_YEAR env var is set */
+   {
+      const char *env = getenv("MESA_EXTENSION_MAX_YEAR");
+      if (env) {
+         maxYear = atoi(env);
+         _mesa_debug(ctx, "Note: limiting GL extensions to %u or earlier\n",
+                     maxYear);
+      }
+   }
 
    /* Compute length of the extension string. */
    count = 0;
    for (i = extension_table; i->name != 0; ++i) {
-      if (base[i->offset] && (i->api_set & (1 << ctx->API))) {
+      if (base[i->offset] &&
+          i->year <= maxYear &&
+          (i->api_set & (1 << ctx->API))) {
 	 length += strlen(i->name) + 1; /* +1 for space */
 	 ++count;
       }
@@ -894,7 +908,7 @@ _mesa_make_extension_string(struct gl_context *ctx)
       return NULL;
    }
 
-   extension_indices = malloc(count * sizeof extension_indices);
+   extension_indices = malloc(count * sizeof(extension_index));
    if (extension_indices == NULL) {
       free(exts);
       free(extra_extensions);
@@ -908,7 +922,9 @@ _mesa_make_extension_string(struct gl_context *ctx)
     */
    j = 0;
    for (i = extension_table; i->name != 0; ++i) {
-      if (base[i->offset] && (i->api_set & (1 << ctx->API))) {
+      if (base[i->offset] &&
+          i->year <= maxYear &&
+          (i->api_set & (1 << ctx->API))) {
          extension_indices[j++] = i - extension_table;
       }
    }

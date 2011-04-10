@@ -111,8 +111,7 @@ static void radeon_cs_context_cleanup(struct radeon_cs_context *csc)
 
     for (i = 0; i < csc->crelocs; i++) {
         p_atomic_dec(&csc->relocs_bo[i]->num_cs_references);
-        radeon_bo_unref(csc->relocs_bo[i]);
-        csc->relocs_bo[i] = NULL;
+        radeon_bo_reference(&csc->relocs_bo[i], NULL);
     }
 
     csc->crelocs = 0;
@@ -266,9 +265,9 @@ static void radeon_add_reloc(struct radeon_cs_context *csc,
     }
 
     /* Initialize the new relocation. */
-    radeon_bo_ref(bo);
+    csc->relocs_bo[csc->crelocs] = NULL;
+    radeon_bo_reference(&csc->relocs_bo[csc->crelocs], bo);
     p_atomic_inc(&bo->num_cs_references);
-    csc->relocs_bo[csc->crelocs] = bo;
     reloc = &csc->relocs[csc->crelocs];
     reloc->handle = bo->handle;
     reloc->read_domains = rd;
@@ -322,7 +321,7 @@ static void radeon_drm_cs_write_reloc(struct r300_winsys_cs *rcs,
     unsigned index = radeon_get_reloc(cs->csc, bo);
 
     if (index == -1) {
-        fprintf(stderr, "r300: Cannot get a relocation in %s.\n", __func__);
+        fprintf(stderr, "radeon: Cannot get a relocation in %s.\n", __func__);
         return;
     }
 
@@ -379,8 +378,15 @@ static void radeon_drm_cs_flush(struct r300_winsys_cs *rcs, unsigned flags)
 
         cs->csc->chunks[0].length_dw = cs->base.cdw;
 
-        for (i = 0; i < crelocs; i++)
+        for (i = 0; i < crelocs; i++) {
+            /* Update the number of active asynchronous CS ioctls for the buffer. */
             p_atomic_inc(&cs->csc->relocs_bo[i]->num_active_ioctls);
+
+            /* Update whether the buffer is busy for write. */
+            if (cs->csc->relocs[i].write_domain) {
+                cs->csc->relocs_bo[i]->busy_for_write = TRUE;
+            }
+        }
 
         if (cs->ws->num_cpus > 1 && debug_get_option_thread() &&
             (flags & R300_FLUSH_ASYNC)) {
