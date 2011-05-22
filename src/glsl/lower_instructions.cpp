@@ -138,7 +138,9 @@ lower_instructions_visitor::div_to_mul_rcp(ir_expression *ir)
       /* op0 / op1 -> op0 * (1.0 / op1) */
       ir->operation = ir_binop_mul;
       ir->operands[1] = expr;
-   } else {
+   }
+#if 0
+   else {
       /* Be careful with integer division -- we need to do it as a
        * float and re-truncate, since rcp(n > 1) of an integer would
        * just be 0.
@@ -172,6 +174,7 @@ lower_instructions_visitor::div_to_mul_rcp(ir_expression *ir)
       ir->operands[0] = op0;
       ir->operands[1] = NULL;
    }
+#endif
 
    this->progress = true;
 }
@@ -214,6 +217,12 @@ lower_instructions_visitor::log_to_log2(ir_expression *ir)
 void
 lower_instructions_visitor::mod_to_fract(ir_expression *ir)
 {
+   /* Don't lower integer modulus instructions, since the logical assumption of
+    * this pass (a % b == b * frac(a / b)) is only true for floats.
+    */
+   if (ir->type->is_integer())
+      return;
+
    ir_variable *temp = new(ir) ir_variable(ir->operands[1]->type, "mod_b",
 					   ir_var_temporary);
    this->base_ir->insert_before(temp);

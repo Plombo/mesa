@@ -283,7 +283,7 @@ layout		{
 \*=		return MUL_ASSIGN;
 \/=		return DIV_ASSIGN;
 \+=		return ADD_ASSIGN;
-\%=		return MOD_ASSIGN;
+"%="		return MOD_ASSIGN;
 \<\<=		return LEFT_ASSIGN;
 >>=		return RIGHT_ASSIGN;
 &=		return AND_ASSIGN;
