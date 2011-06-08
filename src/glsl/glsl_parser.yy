@@ -244,7 +244,7 @@ version_statement:
 	      supported = state->Const.GLSL_120;
 	      break;
 	   case 130:
-	      supported = state->Const.GLSL_120;
+	      supported = state->Const.GLSL_130;
 	      break;
 	   default:
 	      supported = false;
