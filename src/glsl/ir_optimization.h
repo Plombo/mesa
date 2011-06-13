@@ -35,6 +35,7 @@
 #define POW_TO_EXP2    0x08
 #define LOG_TO_LOG2    0x10
 #define MOD_TO_FRACT   0x20
+#define INT_AS_FLOAT   0x40 /* not an operation, but a lowering parameter */
 
 bool do_common_optimization(exec_list *ir, bool linked, unsigned max_unroll_iterations);
 
