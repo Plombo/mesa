@@ -469,7 +469,9 @@ _mesa_get_uniformiv(struct gl_context *ctx, GLuint program, GLint location,
 	 const int base = paramPos + offset + i;
 
          for (j = 0; j < cols; j++ ) {
-            params[k++] = prog->Parameters->ParameterValues[base][j].i;
+            params[k++] = ctx->Const.GLSLVersion <= 120 ? 
+               (GLint) prog->Parameters->ParameterValues[base][j].f : 
+               prog->Parameters->ParameterValues[base][j].i;
          }
       }
    }
@@ -505,7 +507,9 @@ _mesa_get_uniformuiv(struct gl_context *ctx, GLuint program, GLint location,
 	 const int base = paramPos + offset + i;
 
          for (j = 0; j < cols; j++ ) {
-            params[k++] = (GLuint) prog->Parameters->ParameterValues[base][j].u;
+            params[k++] = ctx->Const.GLSLVersion <= 120 ? 
+               (GLuint) prog->Parameters->ParameterValues[base][j].f : 
+               prog->Parameters->ParameterValues[base][j].u;
          }
       }
    }
@@ -623,7 +627,6 @@ _mesa_update_shader_textures_used(struct gl_program *prog)
  * Check if the type given by userType is allowed to set a uniform of the
  * target type.  Generally, equivalence is required, but setting Boolean
  * uniforms can be done with glUniformiv or glUniformfv.
- * FIXME: make boolean uniforms work with glUniformfv
  */
 static GLboolean
 compatible_types(GLenum userType, GLenum targetType)
@@ -775,16 +778,22 @@ set_program_uniform(struct gl_context *ctx, struct gl_program *program,
          /* uniformVal (the destination) is always gl_constant_value[4] */
          uniformVal = program->Parameters->ParameterValues[index + offset + k];
 
-         if (basicType == GL_INT) { // FIXME: convert to float for platforms that do not support integers
+         if (basicType == GL_INT) {
             const GLint *iValues = ((const GLint *) values) + k * elems;
             for (i = 0; i < elems; i++) {
-               uniformVal[i].i = iValues[i];
+               if (ctx->Const.GLSLVersion <= 120)
+                  uniformVal[i].f = (GLfloat) iValues[i];
+               else
+                  uniformVal[i].i = iValues[i];
             }
          }
          else if (basicType == GL_UNSIGNED_INT) {
             const GLuint *iValues = ((const GLuint *) values) + k * elems;
             for (i = 0; i < elems; i++) {
-               uniformVal[i].u = iValues[i];
+               if (ctx->Const.GLSLVersion <= 120)
+                  uniformVal[i].f = (GLfloat)(GLuint) iValues[i];
+               else
+                  uniformVal[i].u = iValues[i];
             }
          }
          else {
@@ -798,7 +807,13 @@ set_program_uniform(struct gl_context *ctx, struct gl_program *program,
          /* if the uniform is bool-valued, convert to 1 or 0 */
          if (isUniformBool) {
             for (i = 0; i < elems; i++) {
-               uniformVal[i].b = uniformVal[i].u ? 1 : 0;
+               if (basicType == GL_FLOAT)
+                  uniformVal[i].b = uniformVal[i].f != 0.0f ? 1 : 0;
+               else
+                  uniformVal[i].b = uniformVal[i].u ? 1 : 0;
+               
+               if (ctx->Const.GLSLVersion <= 120)
+                  uniformVal[i].f = uniformVal[i].b ? 1.0f : 0.0f;
             }
          }
       }
