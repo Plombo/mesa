@@ -122,6 +122,7 @@ struct ureg_program
    struct {
       unsigned semantic_name;
       unsigned semantic_index;
+      unsigned usage_mask;
    } output[UREG_MAX_OUTPUT];
    unsigned nr_outputs;
 
@@ -396,21 +397,25 @@ ureg_DECL_system_value(struct ureg_program *ureg,
 
 
 struct ureg_dst 
-ureg_DECL_output( struct ureg_program *ureg,
-                  unsigned name,
-                  unsigned index )
+ureg_DECL_output_masked( struct ureg_program *ureg,
+                         unsigned name,
+                         unsigned index,
+                         unsigned usage_mask )
 {
    unsigned i;
 
    for (i = 0; i < ureg->nr_outputs; i++) {
       if (ureg->output[i].semantic_name == name &&
-          ureg->output[i].semantic_index == index) 
+          ureg->output[i].semantic_index == index) { 
+         ureg->output[i].usage_mask |= usage_mask;
          goto out;
+      }
    }
 
    if (ureg->nr_outputs < UREG_MAX_OUTPUT) {
       ureg->output[i].semantic_name = name;
       ureg->output[i].semantic_index = index;
+      ureg->output[i].usage_mask = usage_mask;
       ureg->nr_outputs++;
    }
    else {
@@ -419,6 +424,15 @@ ureg_DECL_output( struct ureg_program *ureg,
 
 out:
    return ureg_dst_register( TGSI_FILE_OUTPUT, i );
+}
+
+
+struct ureg_dst 
+ureg_DECL_output( struct ureg_program *ureg,
+                  unsigned name,
+                  unsigned index )
+{
+   return ureg_DECL_output_masked(ureg, name, index, TGSI_WRITEMASK_XYZW);
 }
 
 
@@ -1181,7 +1195,8 @@ emit_decl_semantic(struct ureg_program *ureg,
                    unsigned file,
                    unsigned index,
                    unsigned semantic_name,
-                   unsigned semantic_index)
+                   unsigned semantic_index,
+                   unsigned usage_mask)
 {
    union tgsi_any_token *out = get_tokens(ureg, DOMAIN_DECL, 3);
 
@@ -1189,7 +1204,7 @@ emit_decl_semantic(struct ureg_program *ureg,
    out[0].decl.Type = TGSI_TOKEN_TYPE_DECLARATION;
    out[0].decl.NrTokens = 3;
    out[0].decl.File = file;
-   out[0].decl.UsageMask = TGSI_WRITEMASK_XYZW; /* FIXME! */
+   out[0].decl.UsageMask = usage_mask;
    out[0].decl.Semantic = 1;
 
    out[1].value = 0;
@@ -1427,7 +1442,8 @@ static void emit_decls( struct ureg_program *ureg )
                             TGSI_FILE_INPUT,
                             ureg->gs_input[i].index,
                             ureg->gs_input[i].semantic_name,
-                            ureg->gs_input[i].semantic_index);
+                            ureg->gs_input[i].semantic_index,
+                            TGSI_WRITEMASK_XYZW);
       }
    }
 
@@ -1436,7 +1452,8 @@ static void emit_decls( struct ureg_program *ureg )
                          TGSI_FILE_SYSTEM_VALUE,
                          ureg->system_value[i].index,
                          ureg->system_value[i].semantic_name,
-                         ureg->system_value[i].semantic_index);
+                         ureg->system_value[i].semantic_index,
+                         TGSI_WRITEMASK_XYZW);
    }
 
    for (i = 0; i < ureg->nr_outputs; i++) {
@@ -1444,7 +1461,8 @@ static void emit_decls( struct ureg_program *ureg )
                          TGSI_FILE_OUTPUT,
                          i,
                          ureg->output[i].semantic_name,
-                         ureg->output[i].semantic_index);
+                         ureg->output[i].semantic_index,
+                         ureg->output[i].usage_mask);
    }
 
    for (i = 0; i < ureg->nr_samplers; i++) {

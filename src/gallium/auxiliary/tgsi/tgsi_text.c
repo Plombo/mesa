@@ -1024,7 +1024,8 @@ static const char *semantic_names[TGSI_SEMANTIC_COUNT] =
    "PRIM_ID",
    "INSTANCEID",
    "VERTEXID",
-   "STENCIL"
+   "STENCIL",
+   "CLIPDIST"
 };
 
 static const char *interpolate_names[TGSI_INTERPOLATE_COUNT] =

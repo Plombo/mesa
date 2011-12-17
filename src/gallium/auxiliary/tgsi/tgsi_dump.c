@@ -129,7 +129,8 @@ static const char *semantic_names[] =
    "PRIM_ID",
    "INSTANCEID",
    "VERTEXID",
-   "STENCIL"
+   "STENCIL",
+   "CLIPDIST"
 };
 
 static const char *immediate_type_names[] =
