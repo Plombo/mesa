@@ -79,6 +79,8 @@ enum ir_node_type {
    ir_type_return,
    ir_type_swizzle,
    ir_type_texture,
+   ir_type_emitvertex,
+   ir_type_endprim,
    ir_type_max /**< maximum ir_type enum number, for validation */
 };
 
@@ -1792,6 +1794,53 @@ private:
 /*@}*/
 
 /**
+ * IR instruction to emit a vertex in a geometry shader.
+ */
+class ir_emitvertex : public ir_instruction {
+public:
+   ir_emitvertex()
+   {
+      ir_type = ir_type_emitvertex;
+   }
+
+   virtual void accept(ir_visitor *v)
+   {
+      v->visit(this);
+   }
+
+   virtual ir_emitvertex *clone(void *mem_ctx, struct hash_table *) const
+   {
+      return new(mem_ctx) ir_emitvertex();
+   }
+
+   virtual ir_visitor_status accept(ir_hierarchical_visitor *);
+};
+
+/**
+ * IR instruction to complete the current primitive and start a new one in a
+ * geometry shader.
+ */
+class ir_endprim : public ir_instruction {
+public:
+   ir_endprim()
+   {
+      ir_type = ir_type_endprim;
+   }
+
+   virtual void accept(ir_visitor *v)
+   {
+      v->visit(this);
+   }
+
+   virtual ir_endprim *clone(void *mem_ctx, struct hash_table *) const
+   {
+      return new(mem_ctx) ir_endprim();
+   }
+
+   virtual ir_visitor_status accept(ir_hierarchical_visitor *);
+};
+
+/**
  * Apply a visitor to each IR node in a list
  */
 void
@@ -1861,7 +1910,7 @@ ir_has_call(ir_instruction *ir);
 
 extern void
 do_set_program_inouts(exec_list *instructions, struct gl_program *prog,
-                      bool is_fragment_shader);
+                      bool is_fragment_shader, bool is_geometry_shader);
 
 extern char *
 prototype_string(const glsl_type *return_type, const char *name,

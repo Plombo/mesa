@@ -71,6 +71,7 @@
 #include "program/hash_table.h"
 #include "linker.h"
 #include "ir_optimization.h"
+#include "ir_rvalue_visitor.h"
 
 extern "C" {
 #include "main/shaderobj.h"
@@ -169,6 +170,31 @@ public:
 private:
    const char *name;       /**< Find writes to a variable with this name. */
    bool found;             /**< Was a write to the variable found? */
+};
+
+
+class inject_num_vertices_visitor : public ir_rvalue_visitor {
+public:
+   int num_vertices;
+   
+   inject_num_vertices_visitor(int num_vertices)
+   {
+      this->num_vertices = num_vertices;
+   }
+
+   virtual ~inject_num_vertices_visitor()
+   {
+      /* empty */
+   }
+
+   void handle_rvalue(ir_rvalue **rvalue)
+   {
+      if (!(*rvalue) || (*rvalue)->ir_type != ir_type_dereference_variable) return;
+      ir_dereference_variable *ref = (ir_dereference_variable *)(*rvalue);
+      if (strcmp(ref->variable_referenced()->name, "gl_VerticesIn") == 0) {
+         *rvalue = new(ralloc_parent(*rvalue)) ir_constant(num_vertices);
+      }
+   }
 };
 
 
@@ -352,6 +378,74 @@ validate_fragment_shader_executable(struct gl_shader_program *prog,
 		   "`gl_FragColor' and `gl_FragData'\n");
       return false;
    }
+
+   return true;
+}
+
+static int
+vertices_per_prim(int prim)
+{
+   switch (prim) {
+   case GL_POINTS:
+      return 1;
+   case GL_LINES:
+      return 2;
+   case GL_TRIANGLES:
+      return 3;
+   case GL_LINES_ADJACENCY_ARB:
+      return 4;
+   case GL_TRIANGLES_ADJACENCY_ARB:
+      return 6;
+   default:
+      assert(!"Bad primitive");
+      return 3;
+   }
+}
+
+/**
+ * Verify that a geometry shader executable meets all semantic requirements
+ * 
+ * Also sets prog->Geom.VerticesIn as a side effect.
+ *
+ * \param shader Geometry shader executable to be verified
+ */
+bool
+validate_geometry_shader_executable(struct gl_shader_program *prog,
+				    struct gl_shader *shader)
+{
+   if (shader == NULL)
+      return true;
+
+   int num_vertices = vertices_per_prim(prog->Geom.InputType);
+   prog->Geom.VerticesIn = num_vertices;
+   
+   /* Replace references to gl_VerticesIn with the number of input vertices */
+   inject_num_vertices_visitor v(num_vertices);
+   foreach_iter(exec_list_iterator, iter, *shader->ir) {
+      ir_instruction *ir = (ir_instruction *)iter.get();
+      ir->accept(&v);
+   }
+
+   /* set the size of the input arrays to gl_VerticesIn */
+   const char *num_vertices_sized_arrays[] = {
+      "gl_PositionIn",
+      "gl_FrontColorIn",
+      "gl_BackColorIn",
+      "gl_FrontSecondaryColorIn",
+      "gl_BackSecondaryColorIn",
+      "gl_FogFragCoordIn",
+      "gl_PointSizeIn",
+      "gl_ClipVertexIn",
+   };
+   for (unsigned i = 0; i < sizeof(num_vertices_sized_arrays) / sizeof(const char*); i++) {
+      ir_variable *array = shader->symbols->get_variable(num_vertices_sized_arrays[i]);
+      if (array == NULL) continue;
+      assert(array->type->is_array());
+      array->type =
+         glsl_type::get_array_instance(array->type->element_type(), num_vertices);
+   }
+   
+   /* FINISHME: also handle the 2D input arrays gl_TexCoordIn/gl_ClipDistanceIn */
 
    return true;
 }
@@ -590,19 +684,17 @@ cross_validate_outputs_to_inputs(struct gl_shader_program *prog,
 				 gl_shader *producer, gl_shader *consumer)
 {
    glsl_symbol_table parameters;
-   /* FINISHME: Figure these out dynamically. */
-   const char *const producer_stage = "vertex";
-   const char *const consumer_stage = "fragment";
+   const char *const producer_stage = producer->Type == GL_GEOMETRY_SHADER_ARB ?
+		"geometry" : "vertex";
+   const char *const consumer_stage = consumer->Type == GL_GEOMETRY_SHADER_ARB ?
+		"geometry" : "fragment";
 
    /* Find all shader outputs in the "producer" stage.
     */
    foreach_list(node, producer->ir) {
       ir_variable *const var = ((ir_instruction *) node)->as_variable();
 
-      /* FINISHME: For geometry shaders, this should also look for inout
-       * FINISHME: variables.
-       */
-      if ((var == NULL) || (var->mode != ir_var_out))
+      if ((var == NULL) || (var->mode != ir_var_out && var->mode != ir_var_inout))
 	 continue;
 
       parameters.add_variable(var);
@@ -616,10 +708,7 @@ cross_validate_outputs_to_inputs(struct gl_shader_program *prog,
    foreach_list(node, consumer->ir) {
       ir_variable *const input = ((ir_instruction *) node)->as_variable();
 
-      /* FINISHME: For geometry shaders, this should also look for inout
-       * FINISHME: variables.
-       */
-      if ((input == NULL) || (input->mode != ir_var_in))
+      if ((input == NULL) || (input->mode != ir_var_inout))
 	 continue;
 
       ir_variable *const output = parameters.get_variable(input->name);
@@ -1900,8 +1989,14 @@ assign_varying_location(ir_variable *input_var, ir_variable *output_var,
    }
 
    if (input_var) {
-      assert(input_var->location == -1);
-      input_var->location = *input_index;
+      if(input_var->location == -1) {
+         input_var->location = *input_index;
+      } else {
+         /* FINISHME: output and input shader types may have different generic
+          * base locations */
+         output_var->location = input_var->location;
+         return;
+      }
    }
 
    output_var->location = *output_index;
@@ -1977,9 +2072,14 @@ assign_varying_locations(struct gl_context *ctx,
                          unsigned num_tfeedback_decls,
                          tfeedback_decl *tfeedback_decls)
 {
-   /* FINISHME: Set dynamically when geometry shader support is added. */
-   unsigned output_index = VERT_RESULT_VAR0;
-   unsigned input_index = FRAG_ATTRIB_VAR0;
+   unsigned output_index = producer->Type == GL_GEOMETRY_SHADER_ARB ?
+		GEOM_RESULT_VAR0 : VERT_RESULT_VAR0;
+   unsigned input_index = consumer->Type == GL_GEOMETRY_SHADER_ARB ?
+		GEOM_ATTRIB_VAR0 : FRAG_ATTRIB_VAR0;
+   const char *const producer_stage = producer->Type == GL_GEOMETRY_SHADER_ARB ?
+		"geometry" : "vertex";
+   const char *const consumer_stage = consumer->Type == GL_GEOMETRY_SHADER_ARB ?
+		"geometry" : "fragment";
 
    /* Operate in a total of three passes.
     *
@@ -1992,9 +2092,10 @@ assign_varying_locations(struct gl_context *ctx,
     *    not being inputs.  This lets the optimizer eliminate them.
     */
 
-   link_invalidate_variable_locations(producer, ir_var_out, VERT_RESULT_VAR0);
+   /* FINISHME: should also handle ir_var_inout for geometry shaders */
+   link_invalidate_variable_locations(producer, ir_var_out, output_index);
    if (consumer)
-      link_invalidate_variable_locations(consumer, ir_var_in, FRAG_ATTRIB_VAR0);
+      link_invalidate_variable_locations(consumer, ir_var_in, input_index);
 
    foreach_list(node, producer->ir) {
       ir_variable *const output_var = ((ir_instruction *) node)->as_variable();
@@ -2053,8 +2154,9 @@ assign_varying_locations(struct gl_context *ctx,
                 * "glsl1-varying read but not written" in piglit.
                 */
 
-               linker_error(prog, "fragment shader varying %s not written "
-                            "by vertex shader\n.", var->name);
+               linker_error(prog, "%s shader varying %s not written "
+                            "by %s shader\n.",
+                            consumer_stage, var->name, producer_stage);
             }
 
             /* An 'in' variable is only really a shader input if its
@@ -2247,7 +2349,7 @@ check_resources(struct gl_context *ctx, struct gl_shader_program *prog)
    const unsigned max_uniform_components[MESA_SHADER_TYPES] = {
       ctx->Const.VertexProgram.MaxUniformComponents,
       ctx->Const.FragmentProgram.MaxUniformComponents,
-      0          /* FINISHME: Geometry shaders. */
+      ctx->Const.GeometryProgram.MaxUniformComponents
    };
 
    for (unsigned i = 0; i < MESA_SHADER_TYPES; i++) {
@@ -2300,10 +2402,13 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
    unsigned num_vert_shaders = 0;
    struct gl_shader **frag_shader_list;
    unsigned num_frag_shaders = 0;
+   struct gl_shader **geom_shader_list;
+   unsigned num_geom_shaders = 0;
 
    vert_shader_list = (struct gl_shader **)
-      calloc(2 * prog->NumShaders, sizeof(struct gl_shader *));
+      calloc(3 * prog->NumShaders, sizeof(struct gl_shader *));
    frag_shader_list =  &vert_shader_list[prog->NumShaders];
+   geom_shader_list =  &vert_shader_list[prog->NumShaders * 2];
 
    unsigned min_version = UINT_MAX;
    unsigned max_version = 0;
@@ -2321,8 +2426,8 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
 	 num_frag_shaders++;
 	 break;
       case GL_GEOMETRY_SHADER:
-	 /* FINISHME: Support geometry shaders. */
-	 assert(prog->Shaders[i]->Type != GL_GEOMETRY_SHADER);
+	 geom_shader_list[num_geom_shaders] = prog->Shaders[i];
+	 num_geom_shaders++;
 	 break;
       }
    }
@@ -2381,6 +2486,21 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
 			     sh);
    }
 
+   if (num_geom_shaders > 0) {
+      gl_shader *const sh =
+	 link_intrastage_shaders(mem_ctx, ctx, prog, geom_shader_list,
+				 num_geom_shaders);
+
+      if (sh == NULL)
+	 goto done;
+
+      if (!validate_geometry_shader_executable(prog, sh))
+	 goto done;
+
+      _mesa_reference_shader(ctx, &prog->_LinkedShaders[MESA_SHADER_GEOMETRY],
+			     sh);
+   }
+
    /* Here begins the inter-stage linking phase.  Some initial validation is
     * performed, then locations are assigned for uniforms, attributes, and
     * varyings.
@@ -2396,16 +2516,20 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
       /* Validate the inputs of each stage with the output of the preceding
        * stage.
        */
-      for (unsigned i = prev + 1; i < MESA_SHADER_TYPES; i++) {
-	 if (prog->_LinkedShaders[i] == NULL)
-	    continue;
-
-	 if (!cross_validate_outputs_to_inputs(prog,
-					       prog->_LinkedShaders[prev],
-					       prog->_LinkedShaders[i]))
-	    goto done;
-
-	 prev = i;
+      if (prog->_LinkedShaders[MESA_SHADER_GEOMETRY] != NULL) {
+         if (!cross_validate_outputs_to_inputs(prog,
+                                               prog->_LinkedShaders[MESA_SHADER_VERTEX],
+                                               prog->_LinkedShaders[MESA_SHADER_GEOMETRY]))
+            goto done;
+         if (!cross_validate_outputs_to_inputs(prog,
+                                               prog->_LinkedShaders[MESA_SHADER_GEOMETRY],
+                                               prog->_LinkedShaders[MESA_SHADER_FRAGMENT]))
+            goto done;
+      } else {
+         if (!cross_validate_outputs_to_inputs(prog,
+                                               prog->_LinkedShaders[MESA_SHADER_VERTEX],
+                                               prog->_LinkedShaders[MESA_SHADER_FRAGMENT]))
+            goto done;
       }
 
       prog->LinkStatus = true;
@@ -2484,20 +2608,26 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
          goto done;
    }
 
-   for (unsigned i = prev + 1; i < MESA_SHADER_TYPES; i++) {
-      if (prog->_LinkedShaders[i] == NULL)
-	 continue;
-
+   if (prog->_LinkedShaders[MESA_SHADER_GEOMETRY] != NULL) {
       if (!assign_varying_locations(
-             ctx, prog, prog->_LinkedShaders[prev], prog->_LinkedShaders[i],
-             i == MESA_SHADER_FRAGMENT ? num_tfeedback_decls : 0,
-             tfeedback_decls))
-	 goto done;
-
-      prev = i;
+             ctx, prog, prog->_LinkedShaders[MESA_SHADER_VERTEX],
+             prog->_LinkedShaders[MESA_SHADER_GEOMETRY],
+             0, tfeedback_decls))
+         goto done;
+      if (!assign_varying_locations(
+             ctx, prog, prog->_LinkedShaders[MESA_SHADER_GEOMETRY],
+             prog->_LinkedShaders[MESA_SHADER_FRAGMENT],
+             num_tfeedback_decls, tfeedback_decls))
+         goto done;
+   } else {
+      if (!assign_varying_locations(
+             ctx, prog, prog->_LinkedShaders[MESA_SHADER_VERTEX],
+             prog->_LinkedShaders[MESA_SHADER_FRAGMENT],
+             num_tfeedback_decls, tfeedback_decls))
+         goto done;
    }
 
-   if (prev != MESA_SHADER_FRAGMENT && num_tfeedback_decls != 0) {
+   if (prog->_LinkedShaders[MESA_SHADER_FRAGMENT] == NULL && num_tfeedback_decls != 0) {
       /* There was no fragment shader, but we still have to assign varying
        * locations for use by transform feedback.
        */

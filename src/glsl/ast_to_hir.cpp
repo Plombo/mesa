@@ -1976,7 +1976,7 @@ apply_type_qualifier_to_variable(const struct ast_type_qualifier *qual,
 	    || (qual->flags.q.varying && (state->target == fragment_shader)))
       var->mode = ir_var_in;
    else if (qual->flags.q.out
-	    || (qual->flags.q.varying && (state->target == vertex_shader)))
+	    || (qual->flags.q.varying && (state->target == vertex_shader || state->target == geometry_shader)))
       var->mode = ir_var_out;
    else if (qual->flags.q.uniform)
       var->mode = ir_var_uniform;

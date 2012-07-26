@@ -827,8 +827,10 @@ st_translate_geometry_program(struct st_context *st,
    if (!gpv)
       return NULL;
 
-   _mesa_remove_output_reads(&stgp->Base.Base, PROGRAM_OUTPUT);
-   _mesa_remove_output_reads(&stgp->Base.Base, PROGRAM_VARYING);
+   if (!stgp->glsl_to_tgsi) {
+      _mesa_remove_output_reads(&stgp->Base.Base, PROGRAM_OUTPUT);
+      _mesa_remove_output_reads(&stgp->Base.Base, PROGRAM_VARYING);
+   }
 
    ureg = ureg_create( TGSI_PROCESSOR_GEOMETRY );
    if (ureg == NULL) {
@@ -890,12 +892,15 @@ st_translate_geometry_program(struct st_context *st,
             stgp->input_semantic_name[slot] = TGSI_SEMANTIC_FOG;
             stgp->input_semantic_index[slot] = 0;
             break;
-         case GEOM_ATTRIB_TEX_COORD:
-            stgp->input_semantic_name[slot] = TGSI_SEMANTIC_GENERIC;
-            stgp->input_semantic_index[slot] = num_generic++;
-            break;
+         case GEOM_ATTRIB_TEX0:
+         case GEOM_ATTRIB_TEX1:
+         case GEOM_ATTRIB_TEX2:
+         case GEOM_ATTRIB_TEX3:
+         case GEOM_ATTRIB_TEX4:
+         case GEOM_ATTRIB_TEX5:
+         case GEOM_ATTRIB_TEX6:
+         case GEOM_ATTRIB_TEX7:
          case GEOM_ATTRIB_VAR0:
-            /* fall-through */
          default:
             stgp->input_semantic_name[slot] = TGSI_SEMANTIC_GENERIC;
             stgp->input_semantic_index[slot] = num_generic++;
@@ -936,11 +941,11 @@ st_translate_geometry_program(struct st_context *st,
             gs_output_semantic_name[slot] = TGSI_SEMANTIC_COLOR;
             gs_output_semantic_index[slot] = 1;
             break;
-         case GEOM_RESULT_SCOL0:
+         case GEOM_RESULT_BFC0:
             gs_output_semantic_name[slot] = TGSI_SEMANTIC_BCOLOR;
             gs_output_semantic_index[slot] = 0;
             break;
-         case GEOM_RESULT_SCOL1:
+         case GEOM_RESULT_BFC1:
             gs_output_semantic_name[slot] = TGSI_SEMANTIC_BCOLOR;
             gs_output_semantic_index[slot] = 1;
             break;
@@ -1011,23 +1016,43 @@ st_translate_geometry_program(struct st_context *st,
    ureg_property_gs_output_prim(ureg, stgp->Base.OutputType);
    ureg_property_gs_max_vertices(ureg, stgp->Base.VerticesOut);
 
-   st_translate_mesa_program(st->ctx,
-                             TGSI_PROCESSOR_GEOMETRY,
-                             ureg,
-                             &stgp->Base.Base,
-                             /* inputs */
-                             gs_num_inputs,
-                             inputMapping,
-                             stgp->input_semantic_name,
-                             stgp->input_semantic_index,
-                             NULL,
-                             /* outputs */
-                             gs_num_outputs,
-                             outputMapping,
-                             gs_output_semantic_name,
-                             gs_output_semantic_index,
-                             FALSE,
-                             FALSE);
+   if (stgp->glsl_to_tgsi)
+      st_translate_program(st->ctx,
+                           TGSI_PROCESSOR_GEOMETRY,
+                           ureg,
+                           stgp->glsl_to_tgsi,
+                           &stgp->Base.Base,
+                           /* inputs */
+                           gs_num_inputs,
+                           inputMapping,
+                           stgp->input_semantic_name,
+                           stgp->input_semantic_index,
+                           NULL,
+                           /* outputs */
+                           gs_num_outputs,
+                           outputMapping,
+                           gs_output_semantic_name,
+                           gs_output_semantic_index,
+                           FALSE,
+                           FALSE);
+   else
+      st_translate_mesa_program(st->ctx,
+                                TGSI_PROCESSOR_GEOMETRY,
+                                ureg,
+                                &stgp->Base.Base,
+                                /* inputs */
+                                gs_num_inputs,
+                                inputMapping,
+                                stgp->input_semantic_name,
+                                stgp->input_semantic_index,
+                                NULL,
+                                /* outputs */
+                                gs_num_outputs,
+                                outputMapping,
+                                gs_output_semantic_name,
+                                gs_output_semantic_index,
+                                FALSE,
+                                FALSE);
 
    stgp->num_inputs = gs_num_inputs;
    stgp->tgsi.tokens = ureg_get_tokens( ureg, NULL );

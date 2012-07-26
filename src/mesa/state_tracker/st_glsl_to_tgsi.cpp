@@ -103,6 +103,7 @@ public:
    {
       this->file = file;
       this->index = index;
+      this->index2 = -1;
       if (type && (type->is_scalar() || type->is_vector() || type->is_matrix()))
          this->swizzle = swizzle_for_size(type->vector_elements);
       else
@@ -110,6 +111,8 @@ public:
       this->negate = 0;
       this->type = type ? type->base_type : GLSL_TYPE_ERROR;
       this->reladdr = NULL;
+      this->reladdr2 = NULL;
+      this->has_index2 = false;
    }
 
    st_src_reg(gl_register_file file, int index, int type)
@@ -117,9 +120,12 @@ public:
       this->type = type;
       this->file = file;
       this->index = index;
+      this->index2 = -1;
       this->swizzle = SWIZZLE_XYZW;
       this->negate = 0;
       this->reladdr = NULL;
+      this->reladdr2 = NULL;
+      this->has_index2 = false;
    }
 
    st_src_reg()
@@ -127,20 +133,26 @@ public:
       this->type = GLSL_TYPE_ERROR;
       this->file = PROGRAM_UNDEFINED;
       this->index = 0;
+      this->index2 = -1;
       this->swizzle = 0;
       this->negate = 0;
       this->reladdr = NULL;
+      this->reladdr2 = NULL;
+      this->has_index2 = false;
    }
 
    explicit st_src_reg(st_dst_reg reg);
 
    gl_register_file file; /**< PROGRAM_* from Mesa */
    int index; /**< temporary index, VERT_ATTRIB_*, FRAG_ATTRIB_*, etc. */
+   int index2;
    GLuint swizzle; /**< SWIZZLE_XYZWONEZERO swizzles from Mesa. */
    int negate; /**< NEGATE_XYZW mask from mesa */
    int type; /** GLSL_TYPE_* from GLSL IR (enum glsl_base_type) */
    /** Register index should be offset by the integer in this reg. */
    st_src_reg *reladdr;
+   st_src_reg *reladdr2;
+   bool has_index2;
 };
 
 class st_dst_reg {
@@ -181,9 +193,12 @@ st_src_reg::st_src_reg(st_dst_reg reg)
    this->type = reg.type;
    this->file = reg.file;
    this->index = reg.index;
+   this->index2 = -1;
    this->swizzle = SWIZZLE_XYZW;
    this->negate = 0;
    this->reladdr = reg.reladdr;
+   this->reladdr2 = NULL;
+   this->has_index2 = false;
 }
 
 st_dst_reg::st_dst_reg(st_src_reg reg)
@@ -347,6 +362,8 @@ public:
    virtual void visit(ir_discard *);
    virtual void visit(ir_texture *);
    virtual void visit(ir_if *);
+   virtual void visit(ir_emitvertex *);
+   virtual void visit(ir_endprim *);
    /*@}*/
 
    st_src_reg result;
@@ -1975,7 +1992,12 @@ glsl_to_tgsi_visitor::visit(ir_dereference_array *ir)
    src = this->result;
 
    if (index) {
-      src.index += index->value.i[0] * element_size;
+      if (this->prog->Target == GL_GEOMETRY_PROGRAM_NV && src.file == PROGRAM_INPUT) {
+         /* FINISHME: handle 2D arrays gl_TexCoordIn and gl_ClipDistanceIn correctly */
+         src.index2 = index->value.i[0] * element_size;
+         src.has_index2 = true;
+      } else
+         src.index += index->value.i[0] * element_size;
    } else {
       /* Variable index array dereference.  It eats the "vec4" of the
        * base of the array and an index that offsets the TGSI register
@@ -2813,6 +2835,21 @@ glsl_to_tgsi_visitor::visit(ir_if *ir)
    if_inst = emit(ir->condition, TGSI_OPCODE_ENDIF);
 }
 
+
+void
+glsl_to_tgsi_visitor::visit(ir_emitvertex *ir)
+{
+   assert(this->prog->Target == GL_GEOMETRY_PROGRAM_NV);
+   emit(ir, TGSI_OPCODE_EMIT);
+}
+
+void
+glsl_to_tgsi_visitor::visit(ir_endprim *ir)
+{
+   assert(this->prog->Target == GL_GEOMETRY_PROGRAM_NV);
+   emit(ir, TGSI_OPCODE_ENDPRIM);
+}
+
 glsl_to_tgsi_visitor::glsl_to_tgsi_visitor()
 {
    result.file = PROGRAM_UNDEFINED;
@@ -3255,6 +3292,8 @@ glsl_to_tgsi_visitor::copy_propagate(void)
              */
             inst->src[r].file = first->src[0].file;
             inst->src[r].index = first->src[0].index;
+            inst->src[r].index2 = first->src[0].index2;
+            inst->src[r].has_index2 = first->src[0].has_index2;
 
             int swizzle = 0;
             for (int i = 0; i < 4; i++) {
@@ -4108,6 +4147,15 @@ translate_src(struct st_translate *t, const st_src_reg *src_reg)
 {
    struct ureg_src src = src_register(t, src_reg->file, src_reg->index);
 
+   if (t->procType == TGSI_PROCESSOR_GEOMETRY && src_reg->has_index2) {
+      src = src_register(t, src_reg->file, src_reg->index);
+      if (src_reg->reladdr2)
+         src = ureg_src_dimension_indirect(src, ureg_src(t->address[0]),
+                                           src_reg->index2);
+      else
+         src = ureg_src_dimension(src, src_reg->index2);
+   }
+
    src = ureg_swizzle(src,
                       GET_SWZ(src_reg->swizzle, 0) & 0x3,
                       GET_SWZ(src_reg->swizzle, 1) & 0x3,
@@ -4813,7 +4861,11 @@ get_mesa_program(struct gl_context *ctx,
 					       prog->Parameters);
 
    /* Remove reads from output registers. */
-   lower_output_reads(shader->ir);
+   if (shader->Type != GL_GEOMETRY_SHADER) {
+      /* FINISHME: Make lower_output_reads compatible with geometry shaders
+       * and enable it unconditionally. */
+      lower_output_reads(shader->ir);
+   }
 
    /* Emit intermediate IR for main(). */
    visit_exec_list(shader->ir, v);
@@ -4893,7 +4945,8 @@ get_mesa_program(struct gl_context *ctx,
    prog->Instructions = NULL;
    prog->NumInstructions = 0;
 
-   do_set_program_inouts(shader->ir, prog, shader->Type == GL_FRAGMENT_SHADER);
+   do_set_program_inouts(shader->ir, prog, shader->Type == GL_FRAGMENT_SHADER,
+                         shader->Type == GL_GEOMETRY_SHADER);
    count_resources(v, prog);
 
    _mesa_reference_program(ctx, &shader->Program, prog);
@@ -4923,6 +4976,9 @@ get_mesa_program(struct gl_context *ctx,
    case GL_GEOMETRY_SHADER:
       stgp = (struct st_geometry_program *)prog;
       stgp->glsl_to_tgsi = v;
+      stgp->Base.InputType = shader_program->Geom.InputType;
+      stgp->Base.OutputType = shader_program->Geom.OutputType;
+      stgp->Base.VerticesOut = shader_program->Geom.VerticesOut;
       break;
    default:
       assert(!"should not be reached");

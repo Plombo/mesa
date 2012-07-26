@@ -65,6 +65,20 @@ static const builtin_variable builtin_110_fs_variables[] = {
    { ir_var_out, FRAG_RESULT_DEPTH, "float", "gl_FragDepth" },
 };
 
+static const builtin_variable builtin_110_arb_gs_variables[] = {
+   { ir_var_in,  GEOM_ATTRIB_PRIMITIVE_ID, "int", "gl_PrimitiveIDIn" },
+   { ir_var_out, GEOM_RESULT_POS,   "vec4",  "gl_Position" },
+   { ir_var_out, GEOM_RESULT_PSIZ,  "float", "gl_PointSize" },
+   { ir_var_out, GEOM_RESULT_CLIP_VERTEX, "vec4",  "gl_ClipVertex" },
+   { ir_var_out, GEOM_RESULT_COL0,  "vec4",  "gl_FrontColor" },
+   { ir_var_out, GEOM_RESULT_BFC0,  "vec4",  "gl_BackColor" },
+   { ir_var_out, GEOM_RESULT_COL1,  "vec4",  "gl_FrontSecondaryColor" },
+   { ir_var_out, GEOM_RESULT_BFC1,  "vec4",  "gl_BackSecondaryColor" },
+   { ir_var_out, GEOM_RESULT_FOGC,  "float", "gl_FogFragCoord" },
+   { ir_var_out, GEOM_RESULT_PRID,  "int",   "gl_PrimitiveID" },
+   { ir_var_out, GEOM_RESULT_LAYR,  "int",   "gl_Layer" },
+};
+
 static const builtin_variable builtin_110_deprecated_fs_variables[] = {
    { ir_var_in,  FRAG_ATTRIB_COL0,  "vec4",  "gl_Color" },
    { ir_var_in,  FRAG_ATTRIB_COL1,  "vec4",  "gl_SecondaryColor" },
@@ -1045,6 +1059,66 @@ initialize_fs_variables(exec_list *instructions,
 }
 
 void
+initialize_gs_variables(exec_list *instructions,
+			  struct _mesa_glsl_parse_state *state)
+{
+   /* FINISHME: The deprecated builtin variables should be put in a separate
+    * array and only added when an add_deprecated parameter of true is passed.
+    */
+   for (unsigned i = 0; i < Elements(builtin_110_arb_gs_variables); i++) {
+      add_builtin_variable(instructions, state->symbols,
+			   & builtin_110_arb_gs_variables[i]);
+   }
+
+   generate_110_uniforms(instructions, state, true);
+
+   /* From page 54 (page 60 of the PDF) of the GLSL 1.20 spec:
+    *
+    *     "As with all arrays, indices used to subscript gl_TexCoord must
+    *     either be an integral constant expressions, or this array must be
+    *     re-declared by the shader with a size. The size can be at most
+    *     gl_MaxTextureCoords. Using indexes close to 0 may aid the
+    *     implementation in preserving varying resources."
+    */
+   const glsl_type *const float_array_type =
+      glsl_type::get_array_instance(glsl_type::float_type, 0);
+   const glsl_type *const float_2D_array_type =
+      glsl_type::get_array_instance(float_array_type, 0);
+   const glsl_type *const vec4_array_type =
+      glsl_type::get_array_instance(glsl_type::vec4_type, 0);
+   const glsl_type *const vec4_2D_array_type =
+      glsl_type::get_array_instance(vec4_array_type, 0);
+
+   add_variable(instructions, state->symbols,
+		"gl_TexCoord", vec4_array_type, ir_var_out, GEOM_RESULT_TEX0);
+   add_variable(instructions, state->symbols,
+		"gl_FrontColorIn", vec4_array_type, ir_var_in, GEOM_ATTRIB_COLOR0);
+   add_variable(instructions, state->symbols,
+		"gl_BackColorIn", vec4_array_type, ir_var_in, GEOM_ATTRIB_SECONDARY_COLOR0);
+   add_variable(instructions, state->symbols,
+		"gl_FrontSecondaryColorIn", vec4_array_type, ir_var_in, GEOM_ATTRIB_COLOR1);
+   add_variable(instructions, state->symbols,
+		"gl_BackSecondaryColorIn", vec4_array_type, ir_var_in, GEOM_ATTRIB_SECONDARY_COLOR1);
+   add_variable(instructions, state->symbols,
+		"gl_FogFragCoordIn", float_array_type, ir_var_in, GEOM_ATTRIB_FOG_FRAG_COORD);
+   add_variable(instructions, state->symbols,
+		"gl_PointSizeIn", float_array_type, ir_var_in, GEOM_ATTRIB_POINT_SIZE);
+   add_variable(instructions, state->symbols,
+		"gl_ClipVertexIn", vec4_array_type, ir_var_in, GEOM_ATTRIB_CLIP_VERTEX);
+   add_variable(instructions, state->symbols,
+		"gl_PositionIn", vec4_array_type, ir_var_in, GEOM_ATTRIB_POSITION);
+   add_variable(instructions, state->symbols,
+		"gl_TexCoordIn", vec4_2D_array_type, ir_var_in, GEOM_ATTRIB_TEX0);
+
+   /* FINISHME: gl_ClipDistanceIn should only be added when version >= 130. */
+   add_variable(instructions, state->symbols,
+		"gl_ClipDistanceIn", float_2D_array_type, ir_var_in, GEOM_ATTRIB_CLIP_DIST0);
+
+   generate_ARB_draw_buffers_variables(instructions, state, false,
+				       vertex_shader);
+}
+
+void
 _mesa_glsl_initialize_variables(exec_list *instructions,
 				struct _mesa_glsl_parse_state *state)
 {
@@ -1053,6 +1127,7 @@ _mesa_glsl_initialize_variables(exec_list *instructions,
       initialize_vs_variables(instructions, state);
       break;
    case geometry_shader:
+      initialize_gs_variables(instructions, state);
       break;
    case fragment_shader:
       initialize_fs_variables(instructions, state);

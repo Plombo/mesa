@@ -46,10 +46,12 @@
 class ir_set_program_inouts_visitor : public ir_hierarchical_visitor {
 public:
    ir_set_program_inouts_visitor(struct gl_program *prog,
-                                 bool is_fragment_shader)
+                                 bool is_fragment_shader,
+                                 bool is_geometry_shader)
    {
       this->prog = prog;
       this->is_fragment_shader = is_fragment_shader;
+      this->is_geometry_shader = is_geometry_shader;
       this->ht = hash_table_ctor(0,
 				 hash_table_pointer_hash,
 				 hash_table_pointer_compare);
@@ -67,6 +69,7 @@ public:
    struct gl_program *prog;
    struct hash_table *ht;
    bool is_fragment_shader;
+   bool is_geometry_shader;
 };
 
 static void
@@ -107,7 +110,7 @@ ir_set_program_inouts_visitor::visit(ir_dereference_variable *ir)
    if (hash_table_find(this->ht, ir->var) == NULL)
       return visit_continue;
 
-   if (ir->type->is_array()) {
+   if (ir->type->is_array() && !this->is_geometry_shader) {
       mark(this->prog, ir->var, 0,
 	   ir->type->length * ir->type->fields.array->matrix_columns,
            this->is_fragment_shader);
@@ -139,8 +142,11 @@ ir_set_program_inouts_visitor::visit_enter(ir_dereference_array *ir)
 	 width = deref_var->type->fields.array->matrix_columns;
       }
 
-      mark(this->prog, var, index->value.i[0] * width, width,
-           this->is_fragment_shader);
+      if (this->is_geometry_shader)
+         mark(this->prog, var, 0, 1, this->is_fragment_shader);
+      else
+         mark(this->prog, var, index->value.i[0] * width, width,
+              this->is_fragment_shader);
       return visit_continue_with_parent;
    }
 
@@ -171,9 +177,9 @@ ir_set_program_inouts_visitor::visit_enter(ir_function_signature *ir)
 
 void
 do_set_program_inouts(exec_list *instructions, struct gl_program *prog,
-                      bool is_fragment_shader)
+                      bool is_fragment_shader, bool is_geometry_shader)
 {
-   ir_set_program_inouts_visitor v(prog, is_fragment_shader);
+   ir_set_program_inouts_visitor v(prog, is_fragment_shader, is_geometry_shader);
 
    prog->InputsRead = 0;
    prog->OutputsWritten = 0;
