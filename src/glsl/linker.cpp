@@ -244,6 +244,23 @@ link_invalidate_variable_locations(gl_shader *sh, enum ir_variable_mode mode,
 
 
 /**
+ * Gets the shader type (MESA_SHADER_*) at the specified position in the
+ * pipeline, from 0 to MESA_SHADER_TYPES.
+ */
+unsigned
+get_pipeline_stage(unsigned pos)
+{
+   unsigned shader_types[MESA_SHADER_TYPES] = {
+      MESA_SHADER_VERTEX,
+      MESA_SHADER_GEOMETRY,
+      MESA_SHADER_FRAGMENT
+   };
+   assert(pos >= 0 && pos < MESA_SHADER_TYPES);
+   return shader_types[pos];
+}
+
+
+/**
  * Determine the number of attribute slots required for a particular type
  *
  * This code is here because it implements the language rules of a specific
@@ -2509,27 +2526,25 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
       unsigned prev;
 
       for (prev = 0; prev < MESA_SHADER_TYPES; prev++) {
-	 if (prog->_LinkedShaders[prev] != NULL)
+	 if (prog->_LinkedShaders[get_pipeline_stage(prev)] != NULL)
 	    break;
       }
 
       /* Validate the inputs of each stage with the output of the preceding
        * stage.
        */
-      if (prog->_LinkedShaders[MESA_SHADER_GEOMETRY] != NULL) {
+      for (unsigned i = prev + 1; i < MESA_SHADER_TYPES; i++) {
+         unsigned type = get_pipeline_stage(i);
+         unsigned type_prev = get_pipeline_stage(prev);
+         if (prog->_LinkedShaders[type] == NULL)
+            continue;
+
          if (!cross_validate_outputs_to_inputs(prog,
-                                               prog->_LinkedShaders[MESA_SHADER_VERTEX],
-                                               prog->_LinkedShaders[MESA_SHADER_GEOMETRY]))
+					        prog->_LinkedShaders[type_prev],
+					        prog->_LinkedShaders[type]))
             goto done;
-         if (!cross_validate_outputs_to_inputs(prog,
-                                               prog->_LinkedShaders[MESA_SHADER_GEOMETRY],
-                                               prog->_LinkedShaders[MESA_SHADER_FRAGMENT]))
-            goto done;
-      } else {
-         if (!cross_validate_outputs_to_inputs(prog,
-                                               prog->_LinkedShaders[MESA_SHADER_VERTEX],
-                                               prog->_LinkedShaders[MESA_SHADER_FRAGMENT]))
-            goto done;
+
+         prev = i;
       }
 
       prog->LinkStatus = true;
@@ -2582,7 +2597,7 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
 
    unsigned prev;
    for (prev = 0; prev < MESA_SHADER_TYPES; prev++) {
-      if (prog->_LinkedShaders[prev] != NULL)
+      if (prog->_LinkedShaders[get_pipeline_stage(prev)] != NULL)
 	 break;
    }
 
@@ -2608,23 +2623,19 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
          goto done;
    }
 
-   if (prog->_LinkedShaders[MESA_SHADER_GEOMETRY] != NULL) {
+   for (unsigned i = prev + 1; i < MESA_SHADER_TYPES; i++) {
+      unsigned type = get_pipeline_stage(i);
+      unsigned type_prev = get_pipeline_stage(prev);
+      if (prog->_LinkedShaders[type] == NULL)
+         continue;
+
       if (!assign_varying_locations(
-             ctx, prog, prog->_LinkedShaders[MESA_SHADER_VERTEX],
-             prog->_LinkedShaders[MESA_SHADER_GEOMETRY],
-             0, tfeedback_decls))
+             ctx, prog, prog->_LinkedShaders[type_prev], prog->_LinkedShaders[type],
+             type == MESA_SHADER_FRAGMENT ? num_tfeedback_decls : 0,
+             tfeedback_decls))
          goto done;
-      if (!assign_varying_locations(
-             ctx, prog, prog->_LinkedShaders[MESA_SHADER_GEOMETRY],
-             prog->_LinkedShaders[MESA_SHADER_FRAGMENT],
-             num_tfeedback_decls, tfeedback_decls))
-         goto done;
-   } else {
-      if (!assign_varying_locations(
-             ctx, prog, prog->_LinkedShaders[MESA_SHADER_VERTEX],
-             prog->_LinkedShaders[MESA_SHADER_FRAGMENT],
-             num_tfeedback_decls, tfeedback_decls))
-         goto done;
+
+      prev = i;
    }
 
    if (prog->_LinkedShaders[MESA_SHADER_FRAGMENT] == NULL && num_tfeedback_decls != 0) {
