@@ -260,6 +260,38 @@ get_pipeline_stage(unsigned pos)
 }
 
 
+const char *
+get_type_string(unsigned type)
+{
+   switch(type)
+   {
+   case GL_VERTEX_SHADER: return "vertex";
+   case GL_FRAGMENT_SHADER: return "fragment";
+   case GL_GEOMETRY_SHADER_ARB: return "geometry";
+   default: assert(!"Unsupported shader type");
+   }
+   return NULL;
+}
+
+
+int
+get_generic_base(unsigned type, bool is_result)
+{
+   switch(type)
+   {
+   case GL_VERTEX_SHADER:
+      return is_result ? (int) VERT_RESULT_VAR0 : (int) VERT_ATTRIB_GENERIC0;
+   case GL_FRAGMENT_SHADER:
+      return is_result ? -1 : (int) FRAG_ATTRIB_VAR0;
+   case GL_GEOMETRY_SHADER_ARB:
+      return is_result ? (int) GEOM_RESULT_VAR0 : (int) GEOM_ATTRIB_VAR0;
+   default:
+      assert(!"Unsupported shader type");
+   }
+   return -1;
+}
+
+
 /**
  * Determine the number of attribute slots required for a particular type
  *
@@ -743,10 +775,8 @@ cross_validate_outputs_to_inputs(struct gl_shader_program *prog,
 				 gl_shader *producer, gl_shader *consumer)
 {
    glsl_symbol_table parameters;
-   const char *const producer_stage = producer->Type == GL_GEOMETRY_SHADER_ARB ?
-		"geometry" : "vertex";
-   const char *const consumer_stage = consumer->Type == GL_GEOMETRY_SHADER_ARB ?
-		"geometry" : "fragment";
+   const char *const producer_stage = get_type_string(producer->Type);
+   const char *const consumer_stage = get_type_string(consumer->Type);
 
    /* Find all shader outputs in the "producer" stage.
     */
@@ -2163,14 +2193,10 @@ assign_varying_locations(struct gl_context *ctx,
                          unsigned num_tfeedback_decls,
                          tfeedback_decl *tfeedback_decls)
 {
-   unsigned output_index = producer->Type == GL_GEOMETRY_SHADER_ARB ?
-		GEOM_RESULT_VAR0 : VERT_RESULT_VAR0;
-   unsigned input_index = consumer->Type == GL_GEOMETRY_SHADER_ARB ?
-		GEOM_ATTRIB_VAR0 : FRAG_ATTRIB_VAR0;
-   const char *const producer_stage = producer->Type == GL_GEOMETRY_SHADER_ARB ?
-		"geometry" : "vertex";
-   const char *const consumer_stage = consumer->Type == GL_GEOMETRY_SHADER_ARB ?
-		"geometry" : "fragment";
+   unsigned output_index = get_generic_base(producer->Type, true);
+   unsigned input_index = get_generic_base(consumer->Type, false);
+   const char *const producer_stage = get_type_string(producer->Type);
+   const char *const consumer_stage = get_type_string(consumer->Type);
 
    /* Operate in a total of three passes.
     *
