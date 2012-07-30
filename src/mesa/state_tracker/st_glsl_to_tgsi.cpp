@@ -157,6 +157,16 @@ public:
 
 class st_dst_reg {
 public:
+   st_dst_reg(gl_register_file file, int writemask, int type, int index)
+   {
+      this->file = file;
+      this->index = index;
+      this->writemask = writemask;
+      this->cond_mask = COND_TR;
+      this->reladdr = NULL;
+      this->type = type;
+   }
+
    st_dst_reg(gl_register_file file, int writemask, int type)
    {
       this->file = file;
@@ -451,7 +461,8 @@ static st_src_reg undef_src = st_src_reg(PROGRAM_UNDEFINED, 0, GLSL_TYPE_ERROR);
 
 static st_dst_reg undef_dst = st_dst_reg(PROGRAM_UNDEFINED, SWIZZLE_NOOP, GLSL_TYPE_ERROR);
 
-static st_dst_reg address_reg = st_dst_reg(PROGRAM_ADDRESS, WRITEMASK_X, GLSL_TYPE_FLOAT);
+static st_dst_reg address_reg = st_dst_reg(PROGRAM_ADDRESS, WRITEMASK_X, GLSL_TYPE_FLOAT, 0);
+static st_dst_reg address_reg2 = st_dst_reg(PROGRAM_ADDRESS, WRITEMASK_X, GLSL_TYPE_FLOAT, 1);
 
 static void
 fail_link(struct gl_shader_program *prog, const char *fmt, ...) PRINTFLIKE(2, 3);
@@ -517,9 +528,9 @@ glsl_to_tgsi_visitor::emit(ir_instruction *ir, unsigned op,
     * sources into temps.
     */
    num_reladdr += dst.reladdr != NULL;
-   num_reladdr += src0.reladdr != NULL;
-   num_reladdr += src1.reladdr != NULL;
-   num_reladdr += src2.reladdr != NULL;
+   num_reladdr += src0.reladdr != NULL || src0.reladdr2 != NULL;
+   num_reladdr += src1.reladdr != NULL || src1.reladdr2 != NULL;
+   num_reladdr += src2.reladdr != NULL || src2.reladdr2 != NULL;
 
    reladdr_to_temp(ir, &src2, &num_reladdr);
    reladdr_to_temp(ir, &src1, &num_reladdr);
@@ -540,9 +551,6 @@ glsl_to_tgsi_visitor::emit(ir_instruction *ir, unsigned op,
    inst->dead_mask = 0;
 
    inst->function = NULL;
-   
-   if (op == TGSI_OPCODE_ARL || op == TGSI_OPCODE_UARL)
-      this->num_address_regs = 1;
    
    /* Update indirect addressing status used by TGSI */
    if (dst.reladdr) {
@@ -775,6 +783,10 @@ glsl_to_tgsi_visitor::emit_arl(ir_instruction *ir,
 
    if (src0.type == GLSL_TYPE_INT || src0.type == GLSL_TYPE_UINT)
       op = TGSI_OPCODE_UARL;
+
+   assert(dst.file == PROGRAM_ADDRESS);
+   if (dst.index >= this->num_address_regs)
+      this->num_address_regs = dst.index + 1;
 
    emit(NULL, op, dst, src0);
 }
@@ -1322,10 +1334,11 @@ void
 glsl_to_tgsi_visitor::reladdr_to_temp(ir_instruction *ir,
         			    st_src_reg *reg, int *num_reladdr)
 {
-   if (!reg->reladdr)
+   if (!reg->reladdr && !reg->reladdr2)
       return;
 
-   emit_arl(ir, address_reg, *reg->reladdr);
+   if (reg->reladdr) emit_arl(ir, address_reg, *reg->reladdr);
+   if (reg->reladdr2) emit_arl(ir, address_reg2, *reg->reladdr2);
 
    if (*num_reladdr != 1) {
       st_src_reg temp = get_temp(glsl_type::vec4_type);
@@ -1985,15 +1998,18 @@ glsl_to_tgsi_visitor::visit(ir_dereference_array *ir)
    ir_constant *index;
    st_src_reg src;
    int element_size = type_size(ir->type);
+   bool is_2D_input;
 
    index = ir->array_index->constant_expression_value();
 
    ir->array->accept(this);
    src = this->result;
 
+   is_2D_input = this->prog->Target == GL_GEOMETRY_PROGRAM_NV &&
+                 src.file == PROGRAM_INPUT;
+
    if (index) {
-      if (this->prog->Target == GL_GEOMETRY_PROGRAM_NV && src.file == PROGRAM_INPUT) {
-         /* FINISHME: handle 2D arrays gl_TexCoordIn and gl_ClipDistanceIn correctly */
+      if (is_2D_input) {
          src.index2 = index->value.i[0] * element_size;
          src.has_index2 = true;
       } else
@@ -2020,7 +2036,7 @@ glsl_to_tgsi_visitor::visit(ir_dereference_array *ir)
       /* If there was already a relative address register involved, add the
        * new and the old together to get the new offset.
        */
-      if (src.reladdr != NULL) {
+      if (!is_2D_input && src.reladdr != NULL) {
          st_src_reg accum_reg = get_temp(native_integers ?
                                 glsl_type::int_type : glsl_type::float_type);
 
@@ -2030,8 +2046,14 @@ glsl_to_tgsi_visitor::visit(ir_dereference_array *ir)
          index_reg = accum_reg;
       }
 
-      src.reladdr = ralloc(mem_ctx, st_src_reg);
-      memcpy(src.reladdr, &index_reg, sizeof(index_reg));
+      if (is_2D_input) {
+         src.reladdr2 = ralloc(mem_ctx, st_src_reg);
+         memcpy(src.reladdr2, &index_reg, sizeof(index_reg));
+         src.has_index2 = true;
+      } else {
+         src.reladdr = ralloc(mem_ctx, st_src_reg);
+         memcpy(src.reladdr, &index_reg, sizeof(index_reg));
+      }
    }
 
    /* If the type is smaller than a vec4, replicate the last channel out. */
@@ -3257,7 +3279,8 @@ glsl_to_tgsi_visitor::copy_propagate(void)
          int acp_base = inst->src[r].index * 4;
 
          if (inst->src[r].file != PROGRAM_TEMPORARY ||
-             inst->src[r].reladdr)
+             inst->src[r].reladdr ||
+             inst->src[r].reladdr2)
             continue;
 
          /* See if we can find entries in the ACP consisting of MOVs
@@ -3894,7 +3917,7 @@ struct st_translate {
    struct ureg_src *immediates;
    struct ureg_dst outputs[PIPE_MAX_SHADER_OUTPUTS];
    struct ureg_src inputs[PIPE_MAX_SHADER_INPUTS];
-   struct ureg_dst address[1];
+   struct ureg_dst address[2];
    struct ureg_src samplers[PIPE_MAX_SAMPLERS];
    struct ureg_src systemValues[SYSTEM_VALUE_MAX];
 
@@ -4150,8 +4173,8 @@ translate_src(struct st_translate *t, const st_src_reg *src_reg)
    if (t->procType == TGSI_PROCESSOR_GEOMETRY && src_reg->has_index2) {
       src = src_register(t, src_reg->file, src_reg->index);
       if (src_reg->reladdr2)
-         src = ureg_src_dimension_indirect(src, ureg_src(t->address[0]),
-                                           src_reg->index2);
+         src = ureg_src_dimension_indirect(src, ureg_src(t->address[1]),
+                                           src_reg->index);
       else
          src = ureg_src_dimension(src, src_reg->index2);
    }
@@ -4650,8 +4673,10 @@ st_translate_program(
    /* Declare address register.
     */
    if (program->num_address_regs > 0) {
-      assert(program->num_address_regs == 1);
+      assert(program->num_address_regs <= 2);
       t->address[0] = ureg_DECL_address(ureg);
+      if (program->num_address_regs == 2)
+         t->address[1] = ureg_DECL_address(ureg);
    }
 
    /* Declare misc input registers
