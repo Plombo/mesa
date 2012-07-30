@@ -66,6 +66,7 @@ static const builtin_variable builtin_110_fs_variables[] = {
 };
 
 static const builtin_variable builtin_110_arb_gs_variables[] = {
+   { ir_var_in,  -1,                "int",   "gl_VerticesIn" },
    { ir_var_in,  GEOM_ATTRIB_PRIMITIVE_ID, "int", "gl_PrimitiveIDIn" },
    { ir_var_out, GEOM_RESULT_POS,   "vec4",  "gl_Position" },
    { ir_var_out, GEOM_RESULT_PSIZ,  "float", "gl_PointSize" },
@@ -1080,17 +1081,22 @@ initialize_gs_variables(exec_list *instructions,
     *     gl_MaxTextureCoords. Using indexes close to 0 may aid the
     *     implementation in preserving varying resources."
     */
-   const glsl_type *const float_array_type =
-      glsl_type::get_array_instance(glsl_type::float_type, 0);
-   const glsl_type *const float_2D_array_type =
-      glsl_type::get_array_instance(float_array_type, 0);
-   const glsl_type *const vec4_array_type =
+   const glsl_type *vec4_array_type =
       glsl_type::get_array_instance(glsl_type::vec4_type, 0);
-   const glsl_type *const vec4_2D_array_type =
-      glsl_type::get_array_instance(vec4_array_type, 0);
-
    add_variable(instructions, state->symbols,
 		"gl_TexCoord", vec4_array_type, ir_var_out, GEOM_RESULT_TEX0);
+
+   /* For the input arrays with size gl_VerticesIn (injected at link time),
+    * set the size to a nonzero value temporarily to allow indirect addressing.
+    */
+   vec4_array_type = glsl_type::get_array_instance(glsl_type::vec4_type, 6);
+   const glsl_type *const vec4_2D_array_type =
+      glsl_type::get_array_instance(vec4_array_type, 0);
+   const glsl_type *const float_array_type =
+      glsl_type::get_array_instance(glsl_type::float_type, 6);
+   const glsl_type *const float_2D_array_type =
+      glsl_type::get_array_instance(float_array_type, 0);
+
    add_variable(instructions, state->symbols,
 		"gl_FrontColorIn", vec4_array_type, ir_var_in, GEOM_ATTRIB_COLOR0);
    add_variable(instructions, state->symbols,
