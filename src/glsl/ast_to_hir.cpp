@@ -2590,11 +2590,16 @@ ast_declarator_list::hir(exec_list *instructions,
        *     Local variables can only use the qualifier const."
        *
        * This is relaxed in GLSL 1.30.  It is also relaxed by any extension
-       * that adds the 'layout' keyword.
+       * that adds the 'layout' keyword.  The EXT/ARB_geometry_shader4
+       * extensions change this by adding 'varying in' and 'varying out'
+       * qualifiers for geometry shaders.
        */
       if ((state->language_version < 130)
 	  && !state->ARB_explicit_attrib_location_enable
-	  && !state->ARB_fragment_coord_conventions_enable) {
+	  && !state->ARB_fragment_coord_conventions_enable
+	  && !((state->ARB_geometry_shader4_enable
+	      || state->EXT_geometry_shader4_enable)
+	     && this->type->qualifier.flags.q.varying)) {
 	 if (this->type->qualifier.flags.q.out) {
 	    _mesa_glsl_error(& loc, state,
 			     "`out' qualifier in declaration of `%s' "
@@ -2644,14 +2649,14 @@ ast_declarator_list::hir(exec_list *instructions,
 	    mode = "attribute";
 	 } else if (this->type->qualifier.flags.q.uniform) {
 	    mode = "uniform";
-	 } else if (this->type->qualifier.flags.q.varying) {
-	    mode = "varying";
 	 } else if (this->type->qualifier.flags.q.in) {
 	    mode = "in";
 	    extra = " or in function parameter list";
 	 } else if (this->type->qualifier.flags.q.out) {
 	    mode = "out";
 	    extra = " or in function parameter list";
+	 } else if (this->type->qualifier.flags.q.varying) {
+	    mode = "varying";
 	 }
 
 	 if (mode) {
