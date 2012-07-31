@@ -1359,6 +1359,18 @@ storage_qualifier:
 	   memset(& $$, 0, sizeof($$));
 	   $$.flags.q.out = 1;
 	}
+	| VARYING IN_TOK
+	{
+	   memset(& $$, 0, sizeof($$));
+	   $$.flags.q.varying = 1;
+	   $$.flags.q.in = 1;
+	}
+	| VARYING OUT_TOK
+	{
+	   memset(& $$, 0, sizeof($$));
+	   $$.flags.q.varying = 1;
+	   $$.flags.q.out = 1;
+	}
 	| CENTROID IN_TOK
 	{
 	   memset(& $$, 0, sizeof($$));
