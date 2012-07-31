@@ -896,6 +896,18 @@ st_translate_geometry_program(struct st_context *st,
             stgp->input_semantic_name[slot] = TGSI_SEMANTIC_FOG;
             stgp->input_semantic_index[slot] = 0;
             break;
+         case GEOM_ATTRIB_CLIP_VERTEX:
+            stgp->input_semantic_name[slot] = TGSI_SEMANTIC_CLIPVERTEX;
+            stgp->input_semantic_index[slot] = 0;
+            break;
+         case GEOM_ATTRIB_CLIP_DIST0:
+            stgp->input_semantic_name[slot] = TGSI_SEMANTIC_CLIPDIST;
+            stgp->input_semantic_index[slot] = 0;
+            break;
+         case GEOM_ATTRIB_CLIP_DIST1:
+            stgp->input_semantic_name[slot] = TGSI_SEMANTIC_CLIPDIST;
+            stgp->input_semantic_index[slot] = 1;
+            break;
          case GEOM_ATTRIB_TEX0:
          case GEOM_ATTRIB_TEX1:
          case GEOM_ATTRIB_TEX2:
@@ -904,10 +916,18 @@ st_translate_geometry_program(struct st_context *st,
          case GEOM_ATTRIB_TEX5:
          case GEOM_ATTRIB_TEX6:
          case GEOM_ATTRIB_TEX7:
+            stgp->input_semantic_name[slot] = TGSI_SEMANTIC_GENERIC;
+            stgp->input_semantic_index[slot] = (attr - GEOM_ATTRIB_TEX0);
+            break;
          case GEOM_ATTRIB_VAR0:
          default:
+            assert(attr >= GEOM_ATTRIB_VAR0 && attr < GEOM_ATTRIB_MAX);
             stgp->input_semantic_name[slot] = TGSI_SEMANTIC_GENERIC;
-            stgp->input_semantic_index[slot] = num_generic++;
+            stgp->input_semantic_index[slot] = (FRAG_ATTRIB_VAR0 - 
+                                                FRAG_ATTRIB_TEX0 +
+                                                attr -
+                                                GEOM_ATTRIB_VAR0);
+         break;
          }
       }
    }
@@ -961,6 +981,18 @@ st_translate_geometry_program(struct st_context *st,
             gs_output_semantic_name[slot] = TGSI_SEMANTIC_PSIZE;
             gs_output_semantic_index[slot] = 0;
             break;
+         case GEOM_RESULT_CLIP_VERTEX:
+            gs_output_semantic_name[slot] = TGSI_SEMANTIC_CLIPVERTEX;
+            gs_output_semantic_index[slot] = 0;
+            break;
+         case GEOM_RESULT_CLIP_DIST0:
+            gs_output_semantic_name[slot] = TGSI_SEMANTIC_CLIPDIST;
+            gs_output_semantic_index[slot] = 0;
+            break;
+         case GEOM_RESULT_CLIP_DIST1:
+            gs_output_semantic_name[slot] = TGSI_SEMANTIC_CLIPDIST;
+            gs_output_semantic_index[slot] = 1;
+            break;
          case GEOM_RESULT_TEX0:
          case GEOM_RESULT_TEX1:
          case GEOM_RESULT_TEX2:
@@ -969,14 +1001,18 @@ st_translate_geometry_program(struct st_context *st,
          case GEOM_RESULT_TEX5:
          case GEOM_RESULT_TEX6:
          case GEOM_RESULT_TEX7:
-            /* fall-through */
+            gs_output_semantic_name[slot] = TGSI_SEMANTIC_GENERIC;
+            gs_output_semantic_index[slot] = (attr - GEOM_RESULT_TEX0);
+            break;
          case GEOM_RESULT_VAR0:
-            /* fall-through */
          default:
             assert(slot < Elements(gs_output_semantic_name));
-            /* use default semantic info */
+            assert(attr >= GEOM_RESULT_VAR0);
             gs_output_semantic_name[slot] = TGSI_SEMANTIC_GENERIC;
-            gs_output_semantic_index[slot] = num_generic++;
+            gs_output_semantic_index[slot] = (FRAG_ATTRIB_VAR0 - 
+                                              FRAG_ATTRIB_TEX0 +
+                                              attr - 
+                                              GEOM_RESULT_VAR0);
          }
       }
    }
