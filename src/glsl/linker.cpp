@@ -198,6 +198,69 @@ public:
 };
 
 
+class geom_array_resize_visitor : public ir_visitor {
+public:
+   int num_vertices;
+   
+   geom_array_resize_visitor(int num_vertices)
+   {
+      this->num_vertices = num_vertices;
+   }
+
+   virtual ~geom_array_resize_visitor()
+   {
+      /* empty */
+   }
+
+   void visit(ir_function_signature *) {}
+   void visit(ir_function *) {}
+   void visit(ir_expression *) {}
+   void visit(ir_texture *) {}
+   void visit(ir_swizzle *) {}
+   void visit(ir_dereference_variable *) {};
+   void visit(ir_dereference_array *) {};
+   void visit(ir_dereference_record *) {};
+   void visit(ir_assignment *) {};
+   void visit(ir_constant *) {};
+   void visit(ir_call *) {};
+   void visit(ir_return *) {};
+   void visit(ir_discard *) {};
+   void visit(ir_if *) {};
+   void visit(ir_loop *) {};
+   void visit(ir_loop_jump *) {};
+   void visit(ir_emitvertex *) {};
+   void visit(ir_endprim *) {};
+
+   void visit(ir_variable *var)
+   {
+      if (!var->type->is_array() || var->mode != ir_var_in) return;
+
+      if (var->type->element_type()->is_array()) {
+         const glsl_type *inner_type = glsl_type::get_array_instance(
+               var->type->element_type()->element_type(),
+               this->num_vertices);
+         var->type = glsl_type::get_array_instance(inner_type,
+                                                   var->max_array_access);
+      } else {
+         var->type = glsl_type::get_array_instance(var->type->element_type(),
+                                                   this->num_vertices);
+
+         /* XXX: This should be a link error, but a hack in the builtin variable
+          * generation sets the size of the per-vertex input arrays for
+          * EXT/ARB_geometry_shader4 to 6 instead of unsized so that the
+          * compiler will allow variable addressing.  When one of these inputs
+          * is addressed using a variable expression, the compiler sets
+          * max_array_access to 5, and will use this to override the above
+          * resizing of the array at a later stage of linking if we don't fix
+          * the max_array_access here.
+          */
+         if ((int) var->max_array_access >= this->num_vertices)
+            var->max_array_access = this->num_vertices - 1;
+      }
+   }
+};
+
+
 void
 linker_error(gl_shader_program *prog, const char *fmt, ...)
 {
@@ -469,32 +532,18 @@ validate_geometry_shader_executable(struct gl_shader_program *prog,
    prog->Geom.VerticesIn = num_vertices;
    
    /* Replace references to gl_VerticesIn with the number of input vertices */
-   inject_num_vertices_visitor v(num_vertices);
+   inject_num_vertices_visitor inject_visitor(num_vertices);
    foreach_iter(exec_list_iterator, iter, *shader->ir) {
       ir_instruction *ir = (ir_instruction *)iter.get();
-      ir->accept(&v);
+      ir->accept(&inject_visitor);
    }
 
    /* set the size of the input arrays to gl_VerticesIn */
-   const char *num_vertices_sized_arrays[] = {
-      "gl_PositionIn",
-      "gl_FrontColorIn",
-      "gl_BackColorIn",
-      "gl_FrontSecondaryColorIn",
-      "gl_BackSecondaryColorIn",
-      "gl_FogFragCoordIn",
-      "gl_PointSizeIn",
-      "gl_ClipVertexIn",
-   };
-   for (unsigned i = 0; i < sizeof(num_vertices_sized_arrays) / sizeof(const char*); i++) {
-      ir_variable *array = shader->symbols->get_variable(num_vertices_sized_arrays[i]);
-      if (array == NULL) continue;
-      assert(array->type->is_array());
-      array->type =
-         glsl_type::get_array_instance(array->type->element_type(), num_vertices);
+   geom_array_resize_visitor input_resize_visitor(num_vertices);
+   foreach_iter(exec_list_iterator, iter, *shader->ir) {
+      ir_instruction *ir = (ir_instruction *)iter.get();
+      ir->accept(&input_resize_visitor);
    }
-   
-   /* FINISHME: also handle the 2D input arrays gl_TexCoordIn/gl_ClipDistanceIn */
 
    return true;
 }

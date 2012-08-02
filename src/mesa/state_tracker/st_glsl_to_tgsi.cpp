@@ -2049,6 +2049,7 @@ glsl_to_tgsi_visitor::visit(ir_dereference_array *ir)
       if (is_2D_input) {
          src.reladdr2 = ralloc(mem_ctx, st_src_reg);
          memcpy(src.reladdr2, &index_reg, sizeof(index_reg));
+         src.index2 = 0;
          src.has_index2 = true;
       } else {
          src.reladdr = ralloc(mem_ctx, st_src_reg);
@@ -4174,7 +4175,7 @@ translate_src(struct st_translate *t, const st_src_reg *src_reg)
       src = src_register(t, src_reg->file, src_reg->index);
       if (src_reg->reladdr2)
          src = ureg_src_dimension_indirect(src, ureg_src(t->address[1]),
-                                           src_reg->index);
+                                           src_reg->index2);
       else
          src = ureg_src_dimension(src, src_reg->index2);
    }
