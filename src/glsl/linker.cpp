@@ -240,7 +240,7 @@ public:
                var->type->element_type()->element_type(),
                this->num_vertices);
          var->type = glsl_type::get_array_instance(inner_type,
-                                                   var->max_array_access);
+                                                   var->max_array_access+1);
       } else {
          var->type = glsl_type::get_array_instance(var->type->element_type(),
                                                    this->num_vertices);
