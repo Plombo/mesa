@@ -112,9 +112,16 @@ ir_set_program_inouts_visitor::visit(ir_dereference_variable *ir)
    if (hash_table_find(this->ht, ir->var) == NULL)
       return visit_continue;
 
-   if (ir->type->is_array() && !this->is_geometry_shader) {
-      mark(this->prog, ir->var, 0,
-	   ir->type->length * ir->type->fields.array->matrix_columns,
+   bool is_2D_register = this->is_geometry_shader &&
+                         ir->var->mode == ir_var_in &&
+                         ir->type->is_array() &&
+                         !ir->type->element_type()->is_array();
+
+   if (ir->type->is_array() && !is_2D_register) {
+      int matrix_columns = ir->type->fields.array->matrix_columns;
+      if (this->is_geometry_shader && ir->var->mode == ir_var_in)
+         matrix_columns = ir->type->fields.array->fields.array->matrix_columns;
+      mark(this->prog, ir->var, 0, ir->type->length * matrix_columns,
            this->is_fragment_shader);
    } else {
       mark(this->prog, ir->var, 0, ir->type->matrix_columns,
@@ -131,10 +138,17 @@ ir_set_program_inouts_visitor::visit_enter(ir_dereference_array *ir)
    ir_constant *index = ir->array_index->as_constant();
    deref_var = ir->array->as_dereference_variable();
    ir_variable *var = NULL;
+   bool is_2D_input;
 
    /* Check that we're dereferencing a shader in or out */
    if (deref_var)
       var = (ir_variable *)hash_table_find(this->ht, deref_var->var);
+
+   /* Check whether this dereference is of a GS input array (2D register) */
+   is_2D_input = this->is_geometry_shader &&
+                 !ir->type->is_array() &&
+                 (ir->array->ir_type == ir_type_dereference_array ||
+                  (deref_var && deref_var->var->mode == ir_var_in));
 
    if (index && var) {
       int width = 1;
@@ -144,7 +158,7 @@ ir_set_program_inouts_visitor::visit_enter(ir_dereference_array *ir)
 	 width = deref_var->type->fields.array->matrix_columns;
       }
 
-      if (this->is_geometry_shader)
+      if (is_2D_input)
          mark(this->prog, var, 0, 1, this->is_fragment_shader);
       else
          mark(this->prog, var, index->value.i[0] * width, width,

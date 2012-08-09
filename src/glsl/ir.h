@@ -364,7 +364,7 @@ public:
     *
     * Not used for non-array variables.
     */
-   unsigned max_array_access;
+   int max_array_access;
 
    /**
     * Is the variable read-only?
@@ -453,6 +453,8 @@ public:
     *
     *   - Vertex shader input: one of the values from \c gl_vert_attrib.
     *   - Vertex shader output: one of the values from \c gl_vert_result.
+    *   - Geometry shader input: one of the values from \c gl_geom_attrib.
+    *   - Geometry shader output: one of the values from \c gl_geom_result.
     *   - Fragment shader input: one of the values from \c gl_frag_attrib.
     *   - Fragment shader output: one of the values from \c gl_frag_result.
     *   - Uniforms: Per-stage uniform slot number for default uniform block.

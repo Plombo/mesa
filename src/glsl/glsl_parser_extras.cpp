@@ -741,6 +741,23 @@ ast_declaration::ast_declaration(const char *identifier, int is_array,
    this->identifier = identifier;
    this->is_array = is_array;
    this->array_size = array_size;
+   this->is_2D_array = false;
+   this->outer_array_size = NULL;
+   this->initializer = initializer;
+}
+
+
+ast_declaration::ast_declaration(const char *identifier, int is_array,
+				 ast_expression *array_size,
+				 int is_2D_array,
+				 ast_expression *outer_array_size,
+				 ast_expression *initializer)
+{
+   this->identifier = identifier;
+   this->is_array = is_array;
+   this->array_size = array_size;
+   this->is_2D_array = is_2D_array;
+   this->outer_array_size = outer_array_size;
    this->initializer = initializer;
 }
 

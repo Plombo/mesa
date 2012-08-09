@@ -198,7 +198,7 @@ public:
 };
 
 
-class geom_array_resize_visitor : public ir_visitor {
+class geom_array_resize_visitor : public ir_hierarchical_visitor {
 public:
    int num_vertices;
    
@@ -212,28 +212,10 @@ public:
       /* empty */
    }
 
-   void visit(ir_function_signature *) {}
-   void visit(ir_function *) {}
-   void visit(ir_expression *) {}
-   void visit(ir_texture *) {}
-   void visit(ir_swizzle *) {}
-   void visit(ir_dereference_variable *) {};
-   void visit(ir_dereference_array *) {};
-   void visit(ir_dereference_record *) {};
-   void visit(ir_assignment *) {};
-   void visit(ir_constant *) {};
-   void visit(ir_call *) {};
-   void visit(ir_return *) {};
-   void visit(ir_discard *) {};
-   void visit(ir_if *) {};
-   void visit(ir_loop *) {};
-   void visit(ir_loop_jump *) {};
-   void visit(ir_emitvertex *) {};
-   void visit(ir_endprim *) {};
-
-   void visit(ir_variable *var)
+   virtual ir_visitor_status visit(ir_variable *var)
    {
-      if (!var->type->is_array() || var->mode != ir_var_in) return;
+      if (!var->type->is_array() || var->mode != ir_var_in)
+         return visit_continue;
 
       if (var->type->element_type()->is_array()) {
          const glsl_type *inner_type = glsl_type::get_array_instance(
@@ -244,6 +226,7 @@ public:
       } else {
          var->type = glsl_type::get_array_instance(var->type->element_type(),
                                                    this->num_vertices);
+         var->max_array_access = this->num_vertices - 1;
 
          /* XXX: This should be a link error, but a hack in the builtin variable
           * generation sets the size of the per-vertex input arrays for
@@ -257,6 +240,26 @@ public:
          if ((int) var->max_array_access >= this->num_vertices)
             var->max_array_access = this->num_vertices - 1;
       }
+
+      return visit_continue;
+   }
+
+   /* Dereferences of input variables need to be updated so that their type
+    * matches the newly assigned type of the variable they are accessing. */
+   virtual ir_visitor_status visit(ir_dereference_variable *ir)
+   {
+      ir->type = ir->var->type;
+      return visit_continue;
+   }
+
+   /* Dereferences of 2D input arrays need to be updated so that their type
+    * matches the newly assigned type of the array they are accessing. */
+   virtual ir_visitor_status visit_leave(ir_dereference_array *ir)
+   {
+      const glsl_type *const vt = ir->array->type;
+      if (vt->is_array())
+         ir->type = vt->element_type();
+      return visit_continue;
    }
 };
 
@@ -1359,7 +1362,7 @@ update_array_sizes(struct gl_shader_program *prog)
 	 if (var->uniform_block != -1)
 	    continue;
 
-	 unsigned int size = var->max_array_access;
+	 int size = var->max_array_access;
 	 for (unsigned j = 0; j < MESA_SHADER_TYPES; j++) {
 	       if (prog->_LinkedShaders[j] == NULL)
 		  continue;
@@ -1376,7 +1379,7 @@ update_array_sizes(struct gl_shader_program *prog)
 	    }
 	 }
 
-	 if (size + 1 != var->type->fields.array->length) {
+	 if (size + 1 != int(var->type->fields.array->length)) {
 	    /* If this is a built-in uniform (i.e., it's backed by some
 	     * fixed-function state), adjust the number of state slots to
 	     * match the new array size.  The number of slots per array entry

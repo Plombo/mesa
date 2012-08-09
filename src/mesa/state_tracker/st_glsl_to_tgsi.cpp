@@ -2030,7 +2030,10 @@ glsl_to_tgsi_visitor::visit(ir_dereference_array *ir)
    src = this->result;
 
    is_2D_input = this->prog->Target == GL_GEOMETRY_PROGRAM_NV &&
-                 src.file == PROGRAM_INPUT;
+                 src.file == PROGRAM_INPUT && !ir->type->is_array();
+
+   if (this->prog->Target == GL_GEOMETRY_PROGRAM_NV && ir->type->is_array())
+      element_size = 1;
 
    if (index) {
       if (is_2D_input) {
