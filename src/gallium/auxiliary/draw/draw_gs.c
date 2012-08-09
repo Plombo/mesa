@@ -159,6 +159,22 @@ void draw_delete_geometry_shader(struct draw_context *draw,
    FREE(dgs);
 }
 
+static INLINE int
+draw_gs_get_input_index(int semantic, int index,
+                        const struct tgsi_shader_info *input_info)
+{
+   int i;
+   const ubyte *input_semantic_names = input_info->output_semantic_name;
+   const ubyte *input_semantic_indices = input_info->output_semantic_index;
+   for (i = 0; i < PIPE_MAX_SHADER_OUTPUTS; i++) {
+      if (input_semantic_names[i] == semantic &&
+          input_semantic_indices[i] == index)
+         return i;
+   }
+   debug_assert(0);
+   return -1;
+}
+
 /*#define DEBUG_OUTPUTS 1*/
 static INLINE void
 draw_geometry_fetch_outputs(struct draw_geometry_shader *shader,
@@ -239,6 +255,10 @@ static void draw_fetch_gs_input(struct draw_geometry_shader *shader,
             machine->Inputs[idx].xyzw[3].f[prim_idx] =
                (float)shader->in_prim_idx;
          } else {
+            vs_slot = draw_gs_get_input_index(
+                        shader->info.input_semantic_name[slot],
+                        shader->info.input_semantic_index[slot],
+                        shader->input_info);
 #if DEBUG_INPUTS
             debug_printf("\tSlot = %d, vs_slot = %d, idx = %d:\n",
                          slot, vs_slot, idx);
@@ -392,12 +412,14 @@ int draw_geometry_shader_run(struct draw_geometry_shader *shader,
                              const unsigned constants_size[PIPE_MAX_CONSTANT_BUFFERS], 
                              const struct draw_vertex_info *input_verts,
                              const struct draw_prim_info *input_prim,
+                             const struct tgsi_shader_info *input_info,
                              struct draw_vertex_info *output_verts,
                              struct draw_prim_info *output_prims )
 {
    const float (*input)[4] = (const float (*)[4])input_verts->verts->data;
    unsigned input_stride = input_verts->vertex_size;
-   unsigned vertex_size = input_verts->vertex_size;
+   unsigned num_outputs = shader->info.num_outputs;
+   unsigned vertex_size = sizeof(struct vertex_header) + num_outputs * 4 * sizeof(float);
    struct tgsi_exec_machine *machine = shader->machine;
    unsigned num_input_verts = input_prim->linear ?
                               input_verts->count :
@@ -409,11 +431,11 @@ int draw_geometry_shader_run(struct draw_geometry_shader *shader,
                                                     shader->max_output_vertices)
                             * num_in_primitives;
 
-   output_verts->vertex_size = input_verts->vertex_size;
-   output_verts->stride = input_verts->vertex_size;
+   output_verts->vertex_size = vertex_size;
+   output_verts->stride = output_verts->vertex_size;
    output_verts->verts =
       (struct vertex_header *)MALLOC(sizeof(struct vertex_header) +
-                                     input_verts->vertex_size *
+                                     output_verts->vertex_size *
                                      num_in_primitives *
                                      shader->max_output_vertices);
 
@@ -436,6 +458,7 @@ int draw_geometry_shader_run(struct draw_geometry_shader *shader,
    shader->in_prim_idx = 0;
    shader->input_vertex_stride = input_stride;
    shader->input = input;
+   shader->input_info = input_info;
    if (shader->primitive_lengths) {
       FREE(shader->primitive_lengths);
    }
