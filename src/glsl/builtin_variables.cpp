@@ -1089,11 +1089,11 @@ initialize_gs_variables(exec_list *instructions,
    /* For the input arrays with size gl_VerticesIn (injected at link time),
     * set the size to a nonzero value temporarily to allow indirect addressing.
     */
-   vec4_array_type = glsl_type::get_array_instance(glsl_type::vec4_type, 6);
+   vec4_array_type = glsl_type::get_array_instance(glsl_type::vec4_type, 0);
    const glsl_type *const vec4_2D_array_type =
       glsl_type::get_array_instance(vec4_array_type, 0);
    const glsl_type *const float_array_type =
-      glsl_type::get_array_instance(glsl_type::float_type, 6);
+      glsl_type::get_array_instance(glsl_type::float_type, 0);
    const glsl_type *const float_2D_array_type =
       glsl_type::get_array_instance(float_array_type, 0);
 

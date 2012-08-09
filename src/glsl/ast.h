@@ -319,12 +319,17 @@ class ast_declaration : public ast_node {
 public:
    ast_declaration(const char *identifier, int is_array, ast_expression *array_size,
 		   ast_expression *initializer);
+   ast_declaration(const char *identifier, int is_array, ast_expression *array_size,
+		   int is_2D_array, ast_expression *outer_array_size,
+		   ast_expression *initializer);
    virtual void print(void) const;
 
    const char *identifier;
    
    int is_array;
    ast_expression *array_size;
+   int is_2D_array;
+   ast_expression *outer_array_size;
 
    ast_expression *initializer;
 };
