@@ -972,6 +972,12 @@ init_declarator_list:
 	   ast_declaration *decl = new(ctx) ast_declaration($3, true, $5, NULL);
 	   decl->set_location(yylloc);
 
+	   if (state->ARB_geometry_shader4_enable &&
+	       $1->type->qualifier.flags.q.in &&
+	       $5->oper == ast_identifier &&
+	       strcmp($5->primary_expression.identifier, "gl_VerticesIn") == 0)
+	      decl->array_size = NULL;
+
 	   $$ = $1;
 	   $$->declarations.push_tail(&decl->link);
 	   state->symbols->add_variable(new(state) ir_variable(NULL, $3, ir_var_auto));
@@ -991,6 +997,12 @@ init_declarator_list:
 	   void *ctx = state;
 	   ast_declaration *decl = new(ctx) ast_declaration($3, true, $5, true, $8, NULL);
 	   decl->set_location(yylloc);
+
+	   if (state->ARB_geometry_shader4_enable &&
+	       $1->type->qualifier.flags.q.in &&
+	       $5->oper == ast_identifier &&
+	       strcmp($5->primary_expression.identifier, "gl_VerticesIn") == 0)
+	      decl->array_size = NULL;
 
 	   $$ = $1;
 	   $$->declarations.push_tail(&decl->link);
@@ -1060,6 +1072,12 @@ single_declaration:
 	   void *ctx = state;
 	   ast_declaration *decl = new(ctx) ast_declaration($2, true, $4, NULL);
 
+	   if (state->ARB_geometry_shader4_enable &&
+	       $1->qualifier.flags.q.in &&
+	       $4->oper == ast_identifier &&
+	       strcmp($4->primary_expression.identifier, "gl_VerticesIn") == 0)
+	      decl->array_size = NULL;
+
 	   $$ = new(ctx) ast_declarator_list($1);
 	   $$->set_location(yylloc);
 	   $$->declarations.push_tail(&decl->link);
@@ -1077,6 +1095,12 @@ single_declaration:
 	{ // Geometry (EXT/ARB) only
 	   void *ctx = state;
 	   ast_declaration *decl = new(ctx) ast_declaration($2, true, $4, true, $7, NULL);
+
+	   if (state->ARB_geometry_shader4_enable &&
+	       $1->qualifier.flags.q.in &&
+	       $4->oper == ast_identifier &&
+	       strcmp($4->primary_expression.identifier, "gl_VerticesIn") == 0)
+	      decl->array_size = NULL;
 
 	   $$ = new(ctx) ast_declarator_list($1);
 	   $$->set_location(yylloc);
