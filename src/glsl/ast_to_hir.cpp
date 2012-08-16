@@ -2256,6 +2256,29 @@ get_variable_being_redeclared(ir_variable *var, ast_declaration *decl,
       earlier->type = var->type;
       delete var;
       var = NULL;
+   } else if (var->type->is_array()
+       && var->type->element_type()->is_array()
+       && earlier->type->is_array()
+       && earlier->type->element_type()->is_array()
+       && (earlier->type->element_type()->array_size() == 0)
+       && (var->type->element_type()->element_type() == 
+           earlier->type->element_type()->element_type())) {
+      /* FINISHME: This doesn't match the qualifiers on the two
+       * FINISHME: declarations.  It's not 100% clear whether this is
+       * FINISHME: required or not.
+       */
+
+      const int size = var->type->array_size();
+      check_builtin_array_max_size(var->name, size, loc, state);
+      if ((size > 0) && (size <= earlier->max_array_access)) {
+	 _mesa_glsl_error(& loc, state, "array size must be > %u due to "
+			  "previous access",
+			  earlier->max_array_access);
+      }
+
+      earlier->type = var->type;
+      delete var;
+      var = NULL;
    } else if (state->ARB_fragment_coord_conventions_enable
 	      && strcmp(var->name, "gl_FragCoord") == 0
 	      && earlier->type == var->type
