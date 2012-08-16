@@ -112,7 +112,6 @@ lower_clip_distance_visitor::visit(ir_variable *ir)
       if (this->old_clip_distance_in_var)
          return visit_continue;
 
-      printf("lowering gl_ClipDistanceIn\n");
       this->progress = true;
       this->old_clip_distance_in_var = ir;
       assert (ir->type->is_array());
