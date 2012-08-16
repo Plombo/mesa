@@ -77,6 +77,8 @@ extern "C" {
 #include "main/shaderobj.h"
 }
 
+void linker_error(gl_shader_program *, const char *, ...);
+
 /**
  * Visitor that determines whether or not a variable is ever written.
  */
@@ -201,10 +203,14 @@ public:
 class geom_array_resize_visitor : public ir_hierarchical_visitor {
 public:
    int num_vertices;
+   gl_shader_program *prog;
+   bool error;
    
-   geom_array_resize_visitor(int num_vertices)
+   geom_array_resize_visitor(int num_vertices, gl_shader_program *prog)
    {
       this->num_vertices = num_vertices;
+      this->prog = prog;
+      this->error = false;
    }
 
    virtual ~geom_array_resize_visitor()
@@ -218,27 +224,55 @@ public:
          return visit_continue;
 
       if (var->type->element_type()->is_array()) {
+         const int inner_size = var->type->element_type()->array_size();
+
+         /* Generate a link error if the shader has declared this array with
+          * a size larger than the correct size.
+          */
+         if (inner_size && inner_size != this->num_vertices) {
+            linker_error(this->prog, "inner size of array %s declared as %i, "
+                         "but number of input vertices is %i\n",
+                         var->name, inner_size, this->num_vertices);
+            this->error = true;
+            return visit_continue;
+         }
+
          const glsl_type *inner_type = glsl_type::get_array_instance(
                var->type->element_type()->element_type(),
                this->num_vertices);
          var->type = glsl_type::get_array_instance(inner_type,
                                                    var->max_array_access+1);
       } else {
+         int size = var->type->array_size();
+
+         /* Generate a link error if the shader has declared this array with
+          * a size larger than the correct size.  Ideally we would generate a
+          * link error for any size not equal to the correct size, but the
+          * array sizes are set to num_vertices-1 before we reach this stage.
+          */
+         if (size && size > this->num_vertices) {
+            linker_error(this->prog, "size of array %s declared as %i, "
+                         "but number of input vertices is %i\n",
+                         var->name, size, this->num_vertices);
+            this->error = true;
+            return visit_continue;
+         }
+
+         /* Generate a link error if the shader attempts to access an input
+          * array using an index too large for its actual size assigned at link
+          * time.
+          */
+         if (var->max_array_access >= this->num_vertices) {
+            linker_error(this->prog, "geometry shader accesses element %i of "
+                         "%s, but only %i input vertices\n",
+                         var->max_array_access, var->name, this->num_vertices);
+            this->error = true;
+            return visit_continue;
+         }
+
          var->type = glsl_type::get_array_instance(var->type->element_type(),
                                                    this->num_vertices);
          var->max_array_access = this->num_vertices - 1;
-
-         /* XXX: This should be a link error, but a hack in the builtin variable
-          * generation sets the size of the per-vertex input arrays for
-          * EXT/ARB_geometry_shader4 to 6 instead of unsized so that the
-          * compiler will allow variable addressing.  When one of these inputs
-          * is addressed using a variable expression, the compiler sets
-          * max_array_access to 5, and will use this to override the above
-          * resizing of the array at a later stage of linking if we don't fix
-          * the max_array_access here.
-          */
-         if ((int) var->max_array_access >= this->num_vertices)
-            var->max_array_access = this->num_vertices - 1;
       }
 
       return visit_continue;
@@ -542,11 +576,13 @@ validate_geometry_shader_executable(struct gl_shader_program *prog,
    }
 
    /* set the size of the input arrays to gl_VerticesIn */
-   geom_array_resize_visitor input_resize_visitor(num_vertices);
+   geom_array_resize_visitor input_resize_visitor(num_vertices, prog);
    foreach_iter(exec_list_iterator, iter, *shader->ir) {
       ir_instruction *ir = (ir_instruction *)iter.get();
       ir->accept(&input_resize_visitor);
    }
+   if (input_resize_visitor.error)
+      return false;
 
    return true;
 }
