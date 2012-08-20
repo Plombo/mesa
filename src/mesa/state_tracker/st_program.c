@@ -811,7 +811,6 @@ st_translate_geometry_program(struct st_context *st,
    GLuint attr;
    GLbitfield64 inputsRead;
    GLuint vslot = 0;
-   GLuint num_generic = 0;
 
    uint gs_num_inputs = 0;
    uint gs_builtin_inputs = 0;
@@ -938,7 +937,6 @@ st_translate_geometry_program(struct st_context *st,
       gs_output_semantic_index[i] = 0;
    }
 
-   num_generic = 0;
    /*
     * Determine number of outputs, the (default) output register
     * mapping and the semantic information for each output.
@@ -1067,6 +1065,7 @@ st_translate_geometry_program(struct st_context *st,
                            inputMapping,
                            stgp->input_semantic_name,
                            stgp->input_semantic_index,
+                           NULL,
                            NULL,
                            /* outputs */
                            gs_num_outputs,
