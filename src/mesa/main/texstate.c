@@ -495,6 +495,7 @@ update_texture_state( struct gl_context *ctx )
    GLuint unit;
    struct gl_program *fprog = NULL;
    struct gl_program *vprog = NULL;
+   struct gl_program *gprog = NULL;
    GLbitfield enabledFragUnits = 0x0;
 
    if (ctx->Shader.CurrentVertexProgram &&
@@ -507,6 +508,11 @@ update_texture_state( struct gl_context *ctx )
        */
    }
 
+   if (ctx->Shader.CurrentGeometryProgram &&
+       ctx->Shader.CurrentGeometryProgram->LinkStatus) {
+      gprog = ctx->Shader.CurrentGeometryProgram->_LinkedShaders[MESA_SHADER_GEOMETRY]->Program;
+   }
+
    if (ctx->Shader.CurrentFragmentProgram &&
        ctx->Shader.CurrentFragmentProgram->LinkStatus) {
       fprog = ctx->Shader.CurrentFragmentProgram->_LinkedShaders[MESA_SHADER_FRAGMENT]->Program;
@@ -514,10 +520,6 @@ update_texture_state( struct gl_context *ctx )
    else if (ctx->FragmentProgram._Enabled) {
       fprog = &ctx->FragmentProgram.Current->Base;
    }
-
-   /* FINISHME: Geometry shader texture accesses should also be considered
-    * FINISHME: here.
-    */
 
    /* TODO: only set this if there are actual changes */
    ctx->NewState |= _NEW_TEXTURE;
@@ -534,6 +536,7 @@ update_texture_state( struct gl_context *ctx )
       struct gl_texture_unit *texUnit = &ctx->Texture.Unit[unit];
       GLbitfield enabledVertTargets = 0x0;
       GLbitfield enabledFragTargets = 0x0;
+      GLbitfield enabledGeomTargets = 0x0;
       GLbitfield enabledTargets = 0x0;
       GLuint texIndex;
 
@@ -547,6 +550,10 @@ update_texture_state( struct gl_context *ctx )
          enabledVertTargets |= vprog->TexturesUsed[unit];
       }
 
+      if (gprog) {
+         enabledGeomTargets |= gprog->TexturesUsed[unit];
+      }
+
       if (fprog) {
          enabledFragTargets |= fprog->TexturesUsed[unit];
       }
@@ -555,7 +562,8 @@ update_texture_state( struct gl_context *ctx )
          enabledFragTargets |= texUnit->Enabled;
       }
 
-      enabledTargets = enabledVertTargets | enabledFragTargets;
+      enabledTargets = enabledVertTargets | enabledFragTargets |
+                       enabledGeomTargets;
 
       texUnit->_ReallyEnabled = 0x0;
 
