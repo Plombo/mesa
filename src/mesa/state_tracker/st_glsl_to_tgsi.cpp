@@ -3444,6 +3444,7 @@ glsl_to_tgsi_visitor::copy_propagate(void)
           !inst->dst.reladdr &&
           !inst->saturate &&
           !inst->src[0].reladdr &&
+          !inst->src[0].reladdr2 &&
           !inst->src[0].negate) {
          for (int i = 0; i < 4; i++) {
             if (inst->dst.writemask & (1 << i)) {
@@ -4916,11 +4917,7 @@ get_mesa_program(struct gl_context *ctx,
 					       prog->Parameters);
 
    /* Remove reads from output registers. */
-   if (shader->Type != GL_GEOMETRY_SHADER) {
-      /* FINISHME: Make lower_output_reads compatible with geometry shaders
-       * and enable it unconditionally. */
-      lower_output_reads(shader->ir);
-   }
+   lower_output_reads(shader->ir);
 
    /* Emit intermediate IR for main(). */
    visit_exec_list(shader->ir, v);
