@@ -2618,6 +2618,26 @@ ast_declarator_list::hir(exec_list *instructions,
 
       var = new(ctx) ir_variable(var_type, decl->identifier, ir_var_auto);
 
+      /* The 'varying in' and 'varying out' qualifiers can only be used with
+       * ARB_geometry_shader4 and EXT_geometry_shader4. */
+      if (this->type->qualifier.flags.q.varying
+	  && !state->ARB_geometry_shader4_enable) {
+	 if (this->type->qualifier.flags.q.in) {
+	    _mesa_glsl_error(& loc, state,
+			     "`varying in' qualifier in declaration of "
+			     "`%s' only valid for geometry shaders using "
+			     "ARB_geometry_shader4 or EXT_geometry_shader4.",
+			     decl->identifier);
+	 }
+	 else if (this->type->qualifier.flags.q.out) {
+	    _mesa_glsl_error(& loc, state,
+			     "`varying out' qualifier in declaration of "
+			     "`%s' only valid for geometry shaders using "
+			     "ARB_geometry_shader4 or EXT_geometry_shader4.",
+			     decl->identifier);
+	 }
+      }
+
       /* From page 22 (page 28 of the PDF) of the GLSL 1.10 specification;
        *
        *     "Global variables can only use the qualifiers const,
@@ -2634,8 +2654,7 @@ ast_declarator_list::hir(exec_list *instructions,
       if ((state->language_version < 130)
 	  && !state->ARB_explicit_attrib_location_enable
 	  && !state->ARB_fragment_coord_conventions_enable
-	  && !((state->ARB_geometry_shader4_enable
-	      || state->EXT_geometry_shader4_enable)
+	  && !(state->ARB_geometry_shader4_enable
 	     && this->type->qualifier.flags.q.varying)) {
 	 if (this->type->qualifier.flags.q.out) {
 	    _mesa_glsl_error(& loc, state,
