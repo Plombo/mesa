@@ -417,6 +417,10 @@ _mesa_glsl_process_extension(const char *name, YYLTYPE *name_locp,
       const _mesa_glsl_extension *extension = find_extension(name);
       if (extension && extension->compatible_with_state(state)) {
          extension->set_flags(state, behavior);
+         if (strcmp(name, "GL_EXT_geometry_shader4") == 0) {
+            state->ARB_geometry_shader4_enable = state->EXT_geometry_shader4_enable;
+            state->ARB_geometry_shader4_warn = state->EXT_geometry_shader4_warn;
+         }
       } else {
          static const char *const fmt = "extension `%s' unsupported in %s shader";
 
@@ -737,6 +741,23 @@ ast_declaration::ast_declaration(const char *identifier, int is_array,
    this->identifier = identifier;
    this->is_array = is_array;
    this->array_size = array_size;
+   this->is_2D_array = false;
+   this->outer_array_size = NULL;
+   this->initializer = initializer;
+}
+
+
+ast_declaration::ast_declaration(const char *identifier, int is_array,
+				 ast_expression *array_size,
+				 int is_2D_array,
+				 ast_expression *outer_array_size,
+				 ast_expression *initializer)
+{
+   this->identifier = identifier;
+   this->is_array = is_array;
+   this->array_size = array_size;
+   this->is_2D_array = is_2D_array;
+   this->outer_array_size = outer_array_size;
    this->initializer = initializer;
 }
 

@@ -515,7 +515,7 @@ ir_validate::visit(ir_variable *ir)
     * to be out of bounds.
     */
    if (ir->type->array_size() > 0) {
-      if (ir->max_array_access >= ir->type->length) {
+      if (ir->max_array_access >= int(ir->type->length)) {
 	 printf("ir_variable has maximum access out of bounds (%d vs %d)\n",
 		ir->max_array_access, ir->type->length - 1);
 	 ir->print();
