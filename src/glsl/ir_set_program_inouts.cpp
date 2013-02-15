@@ -45,10 +45,12 @@
 class ir_set_program_inouts_visitor : public ir_hierarchical_visitor {
 public:
    ir_set_program_inouts_visitor(struct gl_program *prog,
-                                 bool is_fragment_shader)
+                                 bool is_fragment_shader,
+                                 bool is_geometry_shader)
    {
       this->prog = prog;
       this->is_fragment_shader = is_fragment_shader;
+      this->is_geometry_shader = is_geometry_shader;
    }
    ~ir_set_program_inouts_visitor()
    {
@@ -62,6 +64,7 @@ public:
 
    struct gl_program *prog;
    bool is_fragment_shader;
+   bool is_geometry_shader;
 };
 
 static inline bool
@@ -111,9 +114,16 @@ ir_set_program_inouts_visitor::visit(ir_dereference_variable *ir)
    if (!is_shader_inout(ir->var))
       return visit_continue;
 
-   if (ir->type->is_array()) {
-      mark(this->prog, ir->var, 0,
-	   ir->type->length * ir->type->fields.array->matrix_columns,
+   bool is_2D_register = this->is_geometry_shader &&
+                         ir->var->mode == ir_var_shader_in &&
+                         ir->type->is_array() &&
+                         !ir->type->element_type()->is_array();
+
+   if (ir->type->is_array() && !is_2D_register) {
+      int matrix_columns = ir->type->fields.array->matrix_columns;
+      if (this->is_geometry_shader && ir->var->mode == ir_var_shader_in)
+         matrix_columns = ir->type->fields.array->fields.array->matrix_columns;
+      mark(this->prog, ir->var, 0, ir->type->length * matrix_columns,
            this->is_fragment_shader);
    } else {
       mark(this->prog, ir->var, 0, ir->type->matrix_columns,
@@ -130,10 +140,17 @@ ir_set_program_inouts_visitor::visit_enter(ir_dereference_array *ir)
    ir_constant *index = ir->array_index->as_constant();
    deref_var = ir->array->as_dereference_variable();
    ir_variable *var = deref_var ? deref_var->var : NULL;
+   bool is_2D_input;
 
    /* Check that we're dereferencing a shader in or out */
    if (!var || !is_shader_inout(var))
       return visit_continue;
+
+   /* Check whether this dereference is of a GS input array (2D register) */
+   is_2D_input = this->is_geometry_shader &&
+                 !ir->type->is_array() &&
+                 (ir->array->ir_type == ir_type_dereference_array ||
+                  (deref_var && deref_var->var->mode == ir_var_shader_in));
 
    if (index) {
       int width = 1;
@@ -143,8 +160,11 @@ ir_set_program_inouts_visitor::visit_enter(ir_dereference_array *ir)
 	 width = deref_var->type->fields.array->matrix_columns;
       }
 
-      mark(this->prog, var, index->value.i[0] * width, width,
-           this->is_fragment_shader);
+      if (is_2D_input)
+         mark(this->prog, var, 0, 1, this->is_fragment_shader);
+      else
+         mark(this->prog, var, index->value.i[0] * width, width,
+              this->is_fragment_shader);
       return visit_continue_with_parent;
    }
 
@@ -185,9 +205,9 @@ ir_set_program_inouts_visitor::visit_enter(ir_discard *)
 
 void
 do_set_program_inouts(exec_list *instructions, struct gl_program *prog,
-                      bool is_fragment_shader)
+                      bool is_fragment_shader, bool is_geometry_shader)
 {
-   ir_set_program_inouts_visitor v(prog, is_fragment_shader);
+   ir_set_program_inouts_visitor v(prog, is_fragment_shader, is_geometry_shader);
 
    prog->InputsRead = 0;
    prog->OutputsWritten = 0;

@@ -544,7 +544,7 @@ get_current_attrib(texenv_fragment_program *p, GLuint attrib)
    ir_rvalue *val;
 
    current = p->shader->symbols->get_variable("gl_CurrentAttribFragMESA");
-   current->max_array_access = MAX2(current->max_array_access, attrib);
+   current->max_array_access = MAX2(current->max_array_access, (GLint) attrib);
    val = new(p->mem_ctx) ir_dereference_variable(current);
    ir_rvalue *index = new(p->mem_ctx) ir_constant(attrib);
    return new(p->mem_ctx) ir_dereference_array(val, index);
@@ -588,7 +588,7 @@ get_source(texenv_fragment_program *p,
       var = p->shader->symbols->get_variable("gl_TextureEnvColor");
       assert(var);
       deref = new(p->mem_ctx) ir_dereference_variable(var);
-      var->max_array_access = MAX2(var->max_array_access, unit);
+      var->max_array_access = MAX2(var->max_array_access, (GLint) unit);
       return new(p->mem_ctx) ir_dereference_array(deref,
 						  new(p->mem_ctx) ir_constant(unit));
 
@@ -928,7 +928,7 @@ static void load_texture( texenv_fragment_program *p, GLuint unit )
       texcoord = new(p->mem_ctx) ir_dereference_variable(tc_array);
       ir_rvalue *index = new(p->mem_ctx) ir_constant(unit);
       texcoord = new(p->mem_ctx) ir_dereference_array(texcoord, index);
-      tc_array->max_array_access = MAX2(tc_array->max_array_access, unit);
+      tc_array->max_array_access = MAX2(tc_array->max_array_access, (GLint) unit);
    }
 
    if (!p->state->unit[unit].enabled) {
@@ -1104,7 +1104,7 @@ load_texunit_bumpmap( texenv_fragment_program *p, GLuint unit )
    texcoord = new(p->mem_ctx) ir_dereference_variable(tc_array);
    ir_rvalue *index = new(p->mem_ctx) ir_constant(bumpedUnitNr);
    texcoord = new(p->mem_ctx) ir_dereference_array(texcoord, index);
-   tc_array->max_array_access = MAX2(tc_array->max_array_access, unit);
+   tc_array->max_array_access = MAX2(tc_array->max_array_access, (GLint) unit);
 
    load_texenv_source( p, unit + SRC_TEXTURE0, unit );
 

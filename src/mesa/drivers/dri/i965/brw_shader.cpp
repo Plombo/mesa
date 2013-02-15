@@ -240,7 +240,8 @@ brw_link_shader(struct gl_context *ctx, struct gl_shader_program *shProg)
       ralloc_free(mem_ctx);
 
       do_set_program_inouts(shader->ir, prog,
-			    shader->base.Type == GL_FRAGMENT_SHADER);
+			    shader->base.Type == GL_FRAGMENT_SHADER,
+                            shader->base.Type == GL_GEOMETRY_SHADER);
 
       prog->SamplersUsed = shader->base.active_samplers;
       _mesa_update_shader_textures_used(shProg, prog);

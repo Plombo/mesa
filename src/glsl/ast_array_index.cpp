@@ -108,7 +108,7 @@ _mesa_ast_array_index_to_hir(void *mem_ctx,
 	  * FINISHME: array access limits be added to ir_dereference?
 	  */
 	 ir_variable *const v = array->whole_variable_referenced();
-	 if ((v != NULL) && (unsigned(idx) > v->max_array_access)) {
+	 if ((v != NULL) && (idx > v->max_array_access)) {
 	    v->max_array_access = idx;
 
 	    /* Check whether this access will, as a side effect, implicitly
@@ -118,7 +118,11 @@ _mesa_ast_array_index_to_hir(void *mem_ctx,
 	 }
       }
    } else if (const_index == NULL && array->type->is_array()) {
-      if (array->type->array_size() == 0) {
+      if (array->type->array_size() == 0 &&
+          !(state->ARB_geometry_shader4_enable &&
+            !array->type->element_type()->is_array() &&
+            (array->ir_type != ir_type_dereference_variable ||
+             ((ir_dereference_variable*)array)->var->mode == ir_var_shader_in))) {
 	 _mesa_glsl_error(&loc, state, "unsized array index must be constant");
       } else if (array->type->fields.array->is_interface()) {
 	 /* Page 46 in section 4.3.7 of the OpenGL ES 3.00 spec says:

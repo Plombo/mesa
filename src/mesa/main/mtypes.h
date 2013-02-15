@@ -1860,7 +1860,7 @@ struct gl_program
    GLuint Id;
    GLubyte *String;  /**< Null-terminated program text */
    GLint RefCount;
-   GLenum Target;    /**< GL_VERTEX/FRAGMENT_PROGRAM_ARB */
+   GLenum Target;    /**< GL_VERTEX/FRAGMENT_PROGRAM_ARB, GL_GEOMETRY_PROGRAM_NV */
    GLenum Format;    /**< String encoding format */
 
    struct prog_instruction *Instructions;
@@ -1927,6 +1927,7 @@ struct gl_geometry_program
 {
    struct gl_program Base;   /**< base class */
 
+   GLint VerticesIn;
    GLint VerticesOut;
    GLenum InputType;  /**< GL_POINTS, GL_LINES, GL_LINES_ADJACENCY_ARB,
                            GL_TRIANGLES, or GL_TRIANGLES_ADJACENCY_ARB */
@@ -2299,6 +2300,7 @@ struct gl_shader_program
 
    /** Geometry shader state - copied into gl_geometry_program at link time */
    struct {
+      GLint VerticesIn;
       GLint VerticesOut;
       GLenum InputType;  /**< GL_POINTS, GL_LINES, GL_LINES_ADJACENCY_ARB,
                               GL_TRIANGLES, or GL_TRIANGLES_ADJACENCY_ARB */
