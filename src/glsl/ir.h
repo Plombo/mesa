@@ -79,6 +79,8 @@ enum ir_node_type {
    ir_type_return,
    ir_type_swizzle,
    ir_type_texture,
+   ir_type_emitvertex,
+   ir_type_endprim,
    ir_type_max /**< maximum ir_type enum number, for validation */
 };
 
@@ -451,6 +453,8 @@ public:
     *
     *   - Vertex shader input: one of the values from \c gl_vert_attrib.
     *   - Vertex shader output: one of the values from \c gl_vert_result.
+    *   - Geometry shader input: one of the values from \c gl_geom_attrib.
+    *   - Geometry shader output: one of the values from \c gl_geom_result.
     *   - Fragment shader input: one of the values from \c gl_frag_attrib.
     *   - Fragment shader output: one of the values from \c gl_frag_result.
     *   - Uniforms: Per-stage uniform slot number for default uniform block.
@@ -1809,6 +1813,53 @@ private:
 };
 
 /*@}*/
+
+/**
+ * IR instruction to emit a vertex in a geometry shader.
+ */
+class ir_emitvertex : public ir_instruction {
+public:
+   ir_emitvertex()
+   {
+      ir_type = ir_type_emitvertex;
+   }
+
+   virtual void accept(ir_visitor *v)
+   {
+      v->visit(this);
+   }
+
+   virtual ir_emitvertex *clone(void *mem_ctx, struct hash_table *) const
+   {
+      return new(mem_ctx) ir_emitvertex();
+   }
+
+   virtual ir_visitor_status accept(ir_hierarchical_visitor *);
+};
+
+/**
+ * IR instruction to complete the current primitive and start a new one in a
+ * geometry shader.
+ */
+class ir_endprim : public ir_instruction {
+public:
+   ir_endprim()
+   {
+      ir_type = ir_type_endprim;
+   }
+
+   virtual void accept(ir_visitor *v)
+   {
+      v->visit(this);
+   }
+
+   virtual ir_endprim *clone(void *mem_ctx, struct hash_table *) const
+   {
+      return new(mem_ctx) ir_endprim();
+   }
+
+   virtual ir_visitor_status accept(ir_hierarchical_visitor *);
+};
 
 /**
  * Apply a visitor to each IR node in a list

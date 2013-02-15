@@ -347,6 +347,8 @@ public:
    virtual void visit(ir_discard *);
    virtual void visit(ir_texture *);
    virtual void visit(ir_if *);
+   virtual void visit(ir_emitvertex *);
+   virtual void visit(ir_endprim *);
    /*@}*/
 
    st_src_reg result;
@@ -2831,6 +2833,18 @@ glsl_to_tgsi_visitor::visit(ir_if *ir)
    }
 
    if_inst = emit(ir->condition, TGSI_OPCODE_ENDIF);
+}
+
+void
+glsl_to_tgsi_visitor::visit(ir_emitvertex *ir)
+{
+   assert(!"Geometry shaders not supported.");
+}
+
+void
+glsl_to_tgsi_visitor::visit(ir_endprim *ir)
+{
+   assert(!"Geometry shaders not supported.");
 }
 
 glsl_to_tgsi_visitor::glsl_to_tgsi_visitor()
