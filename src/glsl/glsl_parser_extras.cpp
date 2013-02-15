@@ -289,6 +289,8 @@ static const _mesa_glsl_extension _mesa_glsl_supported_extensions[] = {
    EXT(ARB_shader_bit_encoding,        true,  true,  true,  true,  false,     ARB_shader_bit_encoding),
    EXT(ARB_uniform_buffer_object,      true,  false, true,  true,  false,     ARB_uniform_buffer_object),
    EXT(OES_standard_derivatives,       false, false, true,  false,  true,     OES_standard_derivatives),
+   EXT(ARB_geometry_shader4,           false, true,  false, true,  false,     ARB_geometry_shader4),
+   EXT(EXT_geometry_shader4,           false, true,  false, true,  false,     ARB_geometry_shader4),
 };
 
 #undef EXT

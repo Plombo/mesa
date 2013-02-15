@@ -894,7 +894,14 @@ st_translate_geometry_program(struct st_context *st,
             stgp->input_semantic_name[slot] = TGSI_SEMANTIC_FOG;
             stgp->input_semantic_index[slot] = 0;
             break;
-         case GEOM_ATTRIB_TEX_COORD:
+         case GEOM_ATTRIB_TEX0:
+         case GEOM_ATTRIB_TEX1:
+         case GEOM_ATTRIB_TEX2:
+         case GEOM_ATTRIB_TEX3:
+         case GEOM_ATTRIB_TEX4:
+         case GEOM_ATTRIB_TEX5:
+         case GEOM_ATTRIB_TEX6:
+         case GEOM_ATTRIB_TEX7:
             stgp->input_semantic_name[slot] = TGSI_SEMANTIC_GENERIC;
             stgp->input_semantic_index[slot] = num_generic++;
             break;
@@ -940,11 +947,11 @@ st_translate_geometry_program(struct st_context *st,
             gs_output_semantic_name[slot] = TGSI_SEMANTIC_COLOR;
             gs_output_semantic_index[slot] = 1;
             break;
-         case GEOM_RESULT_SCOL0:
+         case GEOM_RESULT_BFC0:
             gs_output_semantic_name[slot] = TGSI_SEMANTIC_BCOLOR;
             gs_output_semantic_index[slot] = 0;
             break;
-         case GEOM_RESULT_SCOL1:
+         case GEOM_RESULT_BFC1:
             gs_output_semantic_name[slot] = TGSI_SEMANTIC_BCOLOR;
             gs_output_semantic_index[slot] = 1;
             break;

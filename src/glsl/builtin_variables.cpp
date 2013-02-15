@@ -65,6 +65,24 @@ static const builtin_variable builtin_110_fs_variables[] = {
    { ir_var_out, FRAG_RESULT_DEPTH, "float", "gl_FragDepth" },
 };
 
+static const builtin_variable builtin_110_arb_gs_variables[] = {
+   { ir_var_in,  -1,                       "int",   "gl_VerticesIn" },
+   { ir_var_in,  GEOM_ATTRIB_PRIMITIVE_ID, "int",   "gl_PrimitiveIDIn" },
+   { ir_var_out, GEOM_RESULT_POS,          "vec4",  "gl_Position" },
+   { ir_var_out, GEOM_RESULT_PSIZ,         "float", "gl_PointSize" },
+   { ir_var_out, GEOM_RESULT_PRID,         "int",   "gl_PrimitiveID" },
+   { ir_var_out, GEOM_RESULT_LAYR,         "int",   "gl_Layer" },
+};
+
+static const builtin_variable builtin_110_deprecated_arb_gs_variables[] = {
+   { ir_var_out, GEOM_RESULT_CLIP_VERTEX, "vec4",  "gl_ClipVertex" },
+   { ir_var_out, GEOM_RESULT_COL0,        "vec4",  "gl_FrontColor" },
+   { ir_var_out, GEOM_RESULT_BFC0,        "vec4",  "gl_BackColor" },
+   { ir_var_out, GEOM_RESULT_COL1,        "vec4",  "gl_FrontSecondaryColor" },
+   { ir_var_out, GEOM_RESULT_BFC1,        "vec4",  "gl_BackSecondaryColor" },
+   { ir_var_out, GEOM_RESULT_FOGC,        "float", "gl_FogFragCoord" },
+};
+
 static const builtin_variable builtin_110_deprecated_fs_variables[] = {
    { ir_var_in,  FRAG_ATTRIB_COL0,  "vec4",  "gl_Color" },
    { ir_var_in,  FRAG_ATTRIB_COL1,  "vec4",  "gl_SecondaryColor" },
@@ -1044,6 +1062,102 @@ initialize_fs_variables(exec_list *instructions,
 						   state->AMD_shader_stencil_export_warn);
 }
 
+static void
+generate_110_gs_variables(exec_list *instructions,
+			  struct _mesa_glsl_parse_state *state,
+			  bool add_deprecated)
+{
+   for (unsigned i = 0; i < Elements(builtin_110_arb_gs_variables); i++) {
+      add_builtin_variable(instructions, state->symbols,
+			   & builtin_110_arb_gs_variables[i]);
+   }
+
+   if (add_deprecated) {
+      for (unsigned i = 0
+	      ; i < Elements(builtin_110_deprecated_arb_gs_variables)
+	      ; i++) {
+	 add_builtin_variable(instructions, state->symbols,
+			      & builtin_110_deprecated_arb_gs_variables[i]);
+      }
+   }
+
+   /* For the input arrays with size gl_VerticesIn (injected at link time),
+    * set the size to a zero to indicate that they are unsized until link time
+    * or when the user redeclares them with a size.  Note that the size of
+    * these input arrays (the number of input vertices) is known at compile
+    * time for GLSL 1.50 core geometry shaders, but not for shaders using the
+    * EXT/ARB_geometry_shader4 extensions.
+    */
+   const glsl_type *const vec4_array_type =
+      glsl_type::get_array_instance(glsl_type::vec4_type, 0);
+   const glsl_type *const vec4_2D_array_type =
+      glsl_type::get_array_instance(vec4_array_type, 0);
+   const glsl_type *const float_array_type =
+      glsl_type::get_array_instance(glsl_type::float_type, 0);
+
+   add_variable(instructions, state->symbols, "gl_PositionIn",
+		vec4_array_type, ir_var_in, GEOM_ATTRIB_POSITION);
+   add_variable(instructions, state->symbols, "gl_PointSizeIn",
+		float_array_type, ir_var_in, GEOM_ATTRIB_POINT_SIZE);
+
+   if (add_deprecated) {
+      add_variable(instructions, state->symbols, "gl_TexCoord",
+		   vec4_array_type, ir_var_out, GEOM_RESULT_TEX0);
+      add_variable(instructions, state->symbols, "gl_TexCoordIn",
+		   vec4_2D_array_type, ir_var_in, GEOM_ATTRIB_TEX0);
+      add_variable(instructions, state->symbols, "gl_FrontColorIn",
+		   vec4_array_type, ir_var_in, GEOM_ATTRIB_COLOR0);
+      add_variable(instructions, state->symbols, "gl_BackColorIn",
+		   vec4_array_type, ir_var_in, GEOM_ATTRIB_SECONDARY_COLOR0);
+      add_variable(instructions, state->symbols, "gl_FrontSecondaryColorIn",
+		   vec4_array_type, ir_var_in, GEOM_ATTRIB_COLOR1);
+      add_variable(instructions, state->symbols, "gl_BackSecondaryColorIn",
+		   vec4_array_type, ir_var_in, GEOM_ATTRIB_SECONDARY_COLOR1);
+      add_variable(instructions, state->symbols, "gl_ClipVertexIn",
+		   vec4_array_type, ir_var_in, GEOM_ATTRIB_CLIP_VERTEX);
+      add_variable(instructions, state->symbols, "gl_FogFragCoordIn",
+		   float_array_type, ir_var_in, GEOM_ATTRIB_FOG_FRAG_COORD);
+   }
+}
+
+
+static void
+generate_130_gs_variables(exec_list *instructions,
+			  struct _mesa_glsl_parse_state *state,
+			  bool add_deprecated)
+{
+   const glsl_type *const float_array_type =
+      glsl_type::get_array_instance(glsl_type::float_type, 0);
+   const glsl_type *const float_2D_array_type =
+      glsl_type::get_array_instance(float_array_type, 0);
+
+   generate_110_gs_variables(instructions, state, add_deprecated);
+
+   add_variable(instructions, state->symbols, "gl_ClipDistance",
+		float_array_type, ir_var_out, GEOM_RESULT_CLIP_DIST0);
+   add_variable(instructions, state->symbols, "gl_ClipDistanceIn",
+		float_2D_array_type, ir_var_in, GEOM_ATTRIB_CLIP_DIST0);
+}
+
+static void
+initialize_gs_variables(exec_list *instructions,
+			struct _mesa_glsl_parse_state *state)
+{
+
+   switch (state->language_version) {
+   case 110:
+   case 120:
+      generate_110_gs_variables(instructions, state, true);
+      break;
+   case 130:
+      generate_130_gs_variables(instructions, state, true);
+      break;
+   case 140:
+      generate_130_gs_variables(instructions, state, false);
+      break;
+   }
+}
+
 void
 _mesa_glsl_initialize_variables(exec_list *instructions,
 				struct _mesa_glsl_parse_state *state)
@@ -1053,6 +1167,7 @@ _mesa_glsl_initialize_variables(exec_list *instructions,
       initialize_vs_variables(instructions, state);
       break;
    case geometry_shader:
+      initialize_gs_variables(instructions, state);
       break;
    case fragment_shader:
       initialize_fs_variables(instructions, state);

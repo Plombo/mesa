@@ -205,6 +205,10 @@ struct _mesa_glsl_parse_state {
    bool ARB_uniform_buffer_object_warn;
    bool OES_standard_derivatives_enable;
    bool OES_standard_derivatives_warn;
+   bool ARB_geometry_shader4_enable;
+   bool ARB_geometry_shader4_warn;
+   bool EXT_geometry_shader4_enable;
+   bool EXT_geometry_shader4_warn;
    /*@}*/
 
    /** Extensions supported by the OpenGL implementation. */
