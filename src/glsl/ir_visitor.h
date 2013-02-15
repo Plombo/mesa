@@ -62,6 +62,8 @@ public:
    virtual void visit(class ir_if *) = 0;
    virtual void visit(class ir_loop *) = 0;
    virtual void visit(class ir_loop_jump *) = 0;
+   virtual void visit(class ir_emitvertex *) = 0;
+   virtual void visit(class ir_endprim *) = 0;
    /*@}*/
 };
 
@@ -80,6 +82,8 @@ public:
    virtual void visit(class ir_assignment *) {}
    virtual void visit(class ir_constant *) {}
    virtual void visit(class ir_call *) {}
+   virtual void visit(class ir_emitvertex *) {}
+   virtual void visit(class ir_endprim *) {}
 };
 
 #endif /* IR_VISITOR_H */

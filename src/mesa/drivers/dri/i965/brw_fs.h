@@ -249,6 +249,8 @@ public:
    void visit(ir_call *ir);
    void visit(ir_function *ir);
    void visit(ir_function_signature *ir);
+   void visit(ir_emitvertex *);
+   void visit(ir_endprim *);
 
    void swizzle_result(ir_texture *ir, fs_reg orig_val, int sampler);
 
