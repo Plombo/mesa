@@ -28,7 +28,6 @@
 #include "brw_shader.h"
 #include "main/compiler.h"
 #include "program/hash_table.h"
-#include "brw_vs.h"
 
 extern "C" {
 #include "brw_context.h"
@@ -36,6 +35,10 @@ extern "C" {
 };
 
 #include "glsl/ir.h"
+
+struct brw_vec4_compile;
+struct brw_vs_compile;
+struct brw_vec4_prog_key;
 
 namespace brw {
 
