@@ -28,9 +28,9 @@
 #include "brw_shader.h"
 #include "main/compiler.h"
 #include "program/hash_table.h"
+#include "brw_vs.h"
 
 extern "C" {
-#include "brw_vs.h"
 #include "brw_context.h"
 #include "brw_eu.h"
 };

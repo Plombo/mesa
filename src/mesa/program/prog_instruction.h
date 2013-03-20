@@ -397,6 +397,10 @@ struct prog_instruction
 };
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern void
 _mesa_init_instructions(struct prog_instruction *inst, GLuint count);
 
@@ -429,5 +433,9 @@ _mesa_check_soa_dependencies(const struct prog_instruction *inst);
 extern const char *
 _mesa_opcode_string(gl_inst_opcode opcode);
 
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* PROG_INSTRUCTION_H */
