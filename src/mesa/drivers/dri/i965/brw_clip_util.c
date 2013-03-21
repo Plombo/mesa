@@ -243,7 +243,8 @@ void brw_clip_emit_vue(struct brw_clip_compile *c,
 		 eot,		/* eot */
 		 1,		/* writes_complete */
 		 0,		/* urb offset */
-		 BRW_URB_SWIZZLE_NONE);
+		 BRW_URB_SWIZZLE_NONE,
+                 false /* per_slot_offset */);
 }
 
 
@@ -267,7 +268,8 @@ void brw_clip_kill_thread(struct brw_clip_compile *c)
 		 1, 		/* eot */
 		 1,		/* writes complete */
 		 0,
-		 BRW_URB_SWIZZLE_NONE);
+		 BRW_URB_SWIZZLE_NONE,
+                 false /* per_slot_offset */);
 }
 
 

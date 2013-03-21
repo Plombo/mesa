@@ -388,7 +388,7 @@ vec4_generator::generate_tex(vec4_instruction *inst,
 }
 
 void
-vec4_generator::generate_urb_write(vec4_instruction *inst)
+vec4_generator::generate_vs_urb_write(vec4_instruction *inst)
 {
    brw_urb_WRITE(p,
 		 brw_null_reg(), /* dest */
@@ -401,7 +401,27 @@ vec4_generator::generate_urb_write(vec4_instruction *inst)
 		 inst->eot,	/* eot */
 		 inst->eot,	/* writes complete */
 		 inst->offset,	/* urb destination offset */
-		 BRW_URB_SWIZZLE_INTERLEAVE);
+		 BRW_URB_SWIZZLE_INTERLEAVE,
+                 false /* per_slot_offset */);
+}
+
+void
+vec4_generator::generate_gs_urb_write(vec4_instruction *inst)
+{
+   struct brw_reg src = brw_message_reg(inst->base_mrf);
+   brw_urb_WRITE(p,
+		 brw_null_reg(), /* dest */
+		 inst->base_mrf, /* starting mrf reg nr */
+		 src,
+		 false,		/* allocate */
+		 true,		/* used */
+		 inst->mlen,
+		 0,		/* response len */
+		 inst->eot,	/* eot */
+		 inst->eot,	/* writes complete */
+		 inst->offset,	/* urb destination offset */
+		 BRW_URB_SWIZZLE_INTERLEAVE,
+                 true /* per_slot_offset */);
 }
 
 void
@@ -666,7 +686,7 @@ vec4_generator::generate_vec4_instruction(vec4_instruction *instruction,
       break;
 
    case VS_OPCODE_URB_WRITE:
-      generate_urb_write(inst);
+      generate_vs_urb_write(inst);
       break;
 
    case VS_OPCODE_SCRATCH_READ:
@@ -683,6 +703,10 @@ vec4_generator::generate_vec4_instruction(vec4_instruction *instruction,
 
    case VS_OPCODE_PULL_CONSTANT_LOAD_GEN7:
       generate_pull_constant_load_gen7(inst, dst, src[0], src[1]);
+      break;
+
+   case GS_OPCODE_URB_WRITE:
+      generate_gs_urb_write(inst);
       break;
 
    case SHADER_OPCODE_SHADER_TIME_ADD:

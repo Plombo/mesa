@@ -232,7 +232,8 @@ void brw_urb_WRITE(struct brw_compile *p,
 		   bool eot,
 		   bool writes_complete,
 		   GLuint offset,
-		   GLuint swizzle);
+		   GLuint swizzle,
+                   bool per_slot_offset);
 
 void brw_ff_sync(struct brw_compile *p,
 		   struct brw_reg dest,

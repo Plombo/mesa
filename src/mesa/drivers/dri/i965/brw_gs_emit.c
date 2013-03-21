@@ -192,7 +192,8 @@ static void brw_gs_emit_vue(struct brw_gs_compile *c,
 		 allocate ? 0 : 1, /* eot */
 		 1,		/* writes_complete */
 		 0,		/* urb offset */
-		 BRW_URB_SWIZZLE_NONE);
+		 BRW_URB_SWIZZLE_NONE,
+                 false /* per_slot_offset */);
 
    if (allocate) {
       brw_MOV(p, get_element_ud(c->reg.header, 0),
@@ -219,7 +220,8 @@ static void brw_gs_terminate(struct brw_gs_compile *c)
                  true, /* eot */
                  true, /* writes_complete */
                  0, /* offset */
-                 BRW_URB_SWIZZLE_NONE);
+                 BRW_URB_SWIZZLE_NONE,
+                 false /* per_slot_offset */);
 }
 
 /**
