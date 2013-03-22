@@ -185,6 +185,8 @@ brw_upload_vec4_gs_prog(struct brw_context *brw)
       brw->vue_map_geom_out = brw->vec4_gs.prog_data->base.vue_map;
       brw->state.dirty.brw |= BRW_NEW_VUE_MAP_GEOM_OUT;
    }
+
+   assert(!"Untested");
 }
 
 
