@@ -55,6 +55,7 @@ struct brw_vec4_gs_compile
 };
 
 
+#ifdef __cplusplus
 namespace brw {
 
 class vec4_gs_visitor : public vec4_visitor
@@ -84,5 +85,6 @@ private:
 };
 
 } /* namespace brw */
+#endif /* __cplusplus */
 
 #endif /* BRW_VEC4_GS_VISITOR_H */
