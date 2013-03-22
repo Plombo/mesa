@@ -72,6 +72,7 @@ extern const struct brw_tracked_state brw_vertex_state;
 extern const struct brw_tracked_state brw_vs_prog;
 extern const struct brw_tracked_state brw_vs_ubo_surfaces;
 extern const struct brw_tracked_state brw_vs_unit;
+extern const struct brw_tracked_state brw_vec4_gs_prog;
 extern const struct brw_tracked_state brw_wm_prog;
 extern const struct brw_tracked_state brw_renderbuffer_surfaces;
 extern const struct brw_tracked_state brw_texture_surfaces;

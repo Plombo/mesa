@@ -515,8 +515,11 @@ dump_prog_cache(struct brw_context *brw)
 	    name = "VS kernel";
 	    break;
 	 case BRW_GS_PROG:
-	    name = "GS kernel";
+	    name = "GS kernel (fixed function)";
 	    break;
+         case BRW_VEC4_GS_PROG:
+            name = "GS kernel";
+            break;
 	 case BRW_CLIP_PROG:
 	    name = "CLIP kernel";
 	    break;

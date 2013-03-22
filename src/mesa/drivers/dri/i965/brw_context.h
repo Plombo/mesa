@@ -150,6 +150,7 @@ enum brw_state_id {
    BRW_STATE_PROGRAM_CACHE,
    BRW_STATE_STATE_BASE_ADDRESS,
    BRW_STATE_SOL_INDICES,
+   BRW_STATE_VUE_MAP_VS,
    BRW_STATE_VUE_MAP_GEOM_OUT,
 };
 
@@ -179,6 +180,7 @@ enum brw_state_id {
 #define BRW_NEW_PROGRAM_CACHE		(1 << BRW_STATE_PROGRAM_CACHE)
 #define BRW_NEW_STATE_BASE_ADDRESS	(1 << BRW_STATE_STATE_BASE_ADDRESS)
 #define BRW_NEW_SOL_INDICES		(1 << BRW_STATE_SOL_INDICES)
+#define BRW_NEW_VUE_MAP_VS		(1 << BRW_STATE_VUE_MAP_VS)
 #define BRW_NEW_VUE_MAP_GEOM_OUT	(1 << BRW_STATE_VUE_MAP_GEOM_OUT)
 
 struct brw_state_flags {
@@ -495,6 +497,8 @@ struct brw_vec4_gs_prog_data
     * Size of an output vertex, in multiples of 32 bytes.
     */
    unsigned output_vertex_size_32B;
+
+   unsigned output_topology;
 };
 
 /** Number of texture sampler units */
@@ -637,6 +641,7 @@ enum brw_cache_id {
    BRW_VS_PROG,
    BRW_GS_UNIT,
    BRW_GS_PROG,
+   BRW_VEC4_GS_PROG,
    BRW_CLIP_VP,
    BRW_CLIP_UNIT,
    BRW_CLIP_PROG,
@@ -730,6 +735,7 @@ enum shader_time_shader_type {
 #define CACHE_NEW_VS_PROG                (1<<BRW_VS_PROG)
 #define CACHE_NEW_GS_UNIT                (1<<BRW_GS_UNIT)
 #define CACHE_NEW_GS_PROG                (1<<BRW_GS_PROG)
+#define CACHE_NEW_VEC4_GS_PROG           (1<<BRW_VEC4_GS_PROG)
 #define CACHE_NEW_CLIP_VP                (1<<BRW_CLIP_VP)
 #define CACHE_NEW_CLIP_UNIT              (1<<BRW_CLIP_UNIT)
 #define CACHE_NEW_CLIP_PROG              (1<<BRW_CLIP_PROG)
@@ -937,6 +943,13 @@ struct brw_context
    } sampler;
 
    /**
+    * Layout of vertex data exiting the vertex shader.
+    *
+    * BRW_NEW_VUE_MAP_VS is flagged when this VUE map changes.
+    */
+   struct brw_vue_map vue_map_vs;
+
+   /**
     * Layout of vertex data exiting the geometry portion of the pipleine.
     * This comes from the geometry shader if one exists, otherwise from the
     * vertex shader.
@@ -977,6 +990,14 @@ struct brw_context
       uint32_t bind_bo_offset;
       uint32_t surf_offset[BRW_MAX_VS_SURFACES];
    } vs;
+
+   struct {
+      struct brw_vec4_gs_prog_data *prog_data;
+
+      drm_intel_bo *scratch_bo;
+      /** Offset in the program cache to the GS program */
+      uint32_t prog_offset;
+   } vec4_gs;
 
    struct {
       struct brw_gs_prog_data *prog_data;

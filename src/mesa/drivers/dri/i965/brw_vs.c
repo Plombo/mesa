@@ -526,8 +526,15 @@ static void brw_upload_vs_prog(struct brw_context *brw)
    }
    if (memcmp(&brw->vs.prog_data->base.vue_map, &brw->vue_map_geom_out,
               sizeof(brw->vue_map_geom_out)) != 0) {
-      brw->vue_map_geom_out = brw->vs.prog_data->base.vue_map;
-      brw->state.dirty.brw |= BRW_NEW_VUE_MAP_GEOM_OUT;
+      brw->vue_map_vs = brw->vs.prog_data->base.vue_map;
+      brw->state.dirty.brw |= BRW_NEW_VUE_MAP_VS;
+      if (intel->gen < 7) {
+         /* No geometry shader support, so the VS VUE map is the VUE map for
+          * the output of the "geometry" portion of the pipeline.
+          */
+         brw->vue_map_geom_out = brw->vue_map_vs;
+         brw->state.dirty.brw |= BRW_NEW_VUE_MAP_GEOM_OUT;
+      }
    }
 }
 
