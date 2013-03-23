@@ -743,6 +743,7 @@ enum opcode {
 
    GS_OPCODE_URB_WRITE,
    GS_OPCODE_THREAD_END,
+   GS_OPCODE_SET_WRITE_OFFSET,
 };
 
 #define BRW_PREDICATE_NONE             0
