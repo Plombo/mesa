@@ -1006,6 +1006,8 @@ struct brw_context
       drm_intel_bo *scratch_bo;
       /** Offset in the program cache to the GS program */
       uint32_t prog_offset;
+
+      struct brw_push_const_info push_const;
    } vec4_gs;
 
    struct {
