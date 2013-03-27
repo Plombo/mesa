@@ -51,7 +51,7 @@ upload_vs_state(struct brw_context *brw)
    OUT_BATCH(brw->sampler.offset);
    ADVANCE_BATCH();
 
-   if (brw->vs.push_const_size == 0) {
+   if (brw->vs.push_const.size == 0) {
       /* Disable the push constant buffers. */
       BEGIN_BATCH(7);
       OUT_BATCH(_3DSTATE_CONSTANT_VS << 16 | (7 - 2));
@@ -65,12 +65,12 @@ upload_vs_state(struct brw_context *brw)
    } else {
       BEGIN_BATCH(7);
       OUT_BATCH(_3DSTATE_CONSTANT_VS << 16 | (7 - 2));
-      OUT_BATCH(brw->vs.push_const_size);
+      OUT_BATCH(brw->vs.push_const.size);
       OUT_BATCH(0);
       /* Pointer to the VS constant buffer.  Covered by the set of
        * state flags from gen6_prepare_wm_contants
        */
-      OUT_BATCH(brw->vs.push_const_offset);
+      OUT_BATCH(brw->vs.push_const.offset);
       OUT_BATCH(0);
       OUT_BATCH(0);
       OUT_BATCH(0);
