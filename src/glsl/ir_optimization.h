@@ -105,7 +105,7 @@ bool lower_packing_builtins(exec_list *instructions, int op_mask);
 void lower_ubo_reference(struct gl_shader *shader, exec_list *instructions);
 void lower_packed_varyings(void *mem_ctx, unsigned location_base,
                            unsigned locations_used, ir_variable_mode mode,
-                           gl_shader *shader);
+                           unsigned gs_input_vertices, gl_shader *shader);
 bool optimize_redundant_jumps(exec_list *instructions);
 bool optimize_split_arrays(exec_list *instructions, bool linked);
 

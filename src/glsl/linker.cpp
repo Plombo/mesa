@@ -2067,11 +2067,13 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
       unsigned type_prev = get_pipeline_stage(prev);
       if (prog->_LinkedShaders[type] == NULL)
          continue;
+      unsigned gs_input_vertices =
+         type == MESA_SHADER_GEOMETRY ? prog->Geom.VerticesIn : 0;
 
       if (!assign_varying_locations(
              ctx, mem_ctx, prog, prog->_LinkedShaders[type_prev], prog->_LinkedShaders[type],
              get_pipeline_stage(i) == MESA_SHADER_FRAGMENT ? num_tfeedback_decls : 0,
-             tfeedback_decls))
+             tfeedback_decls, gs_input_vertices))
          goto done;
 
       prev = i;
@@ -2083,7 +2085,7 @@ link_shaders(struct gl_context *ctx, struct gl_shader_program *prog)
        */
       if (!assign_varying_locations(ctx, mem_ctx, prog,
                                     prog->_LinkedShaders[get_pipeline_stage(prev)],
-                                    NULL, num_tfeedback_decls, tfeedback_decls))
+                                    NULL, num_tfeedback_decls, tfeedback_decls, 0))
          goto done;
    }
 
