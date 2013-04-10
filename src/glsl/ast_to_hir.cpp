@@ -2705,7 +2705,21 @@ ast_declarator_list::hir(exec_list *instructions,
                                       "cannot have array type")) {
 	       error_emitted = true;
 	    }
-	 }
+	 } else if (state->target == geometry_shader) {
+            /* From the ARB_geometry_shader4 spec:
+             *
+             *     A geometry shader may also read from an input varying
+             *     variable declared with the "varying in" qualifiers. The
+             *     value read will be the same value as written by the vertex
+             *     shader for that varying variable. Since a geometry shader
+             *     operates on primitives, each input varying variable needs
+             *     to be declared as an array.
+             */
+            if (!var->type->is_array()) {
+               _mesa_glsl_error(&loc, state,
+                                "geometry shader inputs must be arrays");
+            }
+         }
       }
 
       /* Integer fragment inputs must be qualified with 'flat'.  In GLSL ES,
