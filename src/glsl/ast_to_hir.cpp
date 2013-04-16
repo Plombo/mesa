@@ -1929,10 +1929,11 @@ apply_type_qualifier_to_variable(const struct ast_type_qualifier *qual,
 
    if (var->interpolation != INTERP_QUALIFIER_NONE &&
        !(state->target == vertex_shader && var->mode == ir_var_shader_out) &&
-       !(state->target == fragment_shader && var->mode == ir_var_shader_in)) {
+       !(state->target == fragment_shader && var->mode == ir_var_shader_in) &&
+       !(state->target == geometry_shader)) {
       _mesa_glsl_error(loc, state,
-		       "interpolation qualifier `%s' can only be applied to "
-		       "vertex shader outputs and fragment shader inputs.",
+		       "interpolation qualifier `%s' cannot be applied to "
+		       "vertex shader inputs or fragment shader outputs.",
 		       var->interpolation_string());
    }
 
@@ -2829,7 +2830,7 @@ ast_declarator_list::hir(exec_list *instructions,
             }
             break;
          default:
-            assert(0);
+            break;
          }
       }
 
