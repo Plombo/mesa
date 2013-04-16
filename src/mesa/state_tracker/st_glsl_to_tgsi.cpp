@@ -128,6 +128,8 @@ public:
       this->swizzle = SWIZZLE_XYZW;
       this->negate = 0;
       this->reladdr = NULL;
+      this->reladdr2 = NULL;
+      this->has_index2 = false;
    }
 
    st_src_reg(gl_register_file file, int index, int type, int index2D)
@@ -2120,14 +2122,15 @@ glsl_to_tgsi_visitor::visit(ir_dereference_array *ir)
    src = this->result;
 
    is_2D_input = this->prog->Target == GL_GEOMETRY_PROGRAM_NV &&
-                 src.file == PROGRAM_INPUT && !ir->type->is_array();
+                 src.file == PROGRAM_INPUT &&
+                 ir->array->ir_type != ir_type_dereference_array;
 
-   if (this->prog->Target == GL_GEOMETRY_PROGRAM_NV && ir->type->is_array())
+   if (is_2D_input)
       element_size = 1;
 
    if (index) {
       if (is_2D_input) {
-         src.index2D = index->value.i[0] * element_size;
+         src.index2D = index->value.i[0];
          src.has_index2 = true;
       } else
          src.index += index->value.i[0] * element_size;
