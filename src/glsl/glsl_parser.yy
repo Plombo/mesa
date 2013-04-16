@@ -1054,7 +1054,7 @@ single_declaration:
 	| fully_specified_type any_identifier '[' ']' '[' constant_expression ']'
 	{ // Geometry (EXT/ARB) only
 	   void *ctx = state;
-	   ast_declaration *decl = new(ctx) ast_declaration($2, true, NULL, true, $6, NULL);
+	   ast_declaration *decl = new(ctx) ast_declaration($2, true, $6, true, NULL, NULL);
 
 	   $$ = new(ctx) ast_declarator_list($1);
 	   $$->set_location(yylloc);
@@ -1063,13 +1063,13 @@ single_declaration:
 	| fully_specified_type any_identifier '[' constant_expression ']' '[' constant_expression ']'
 	{ // Geometry (EXT/ARB) only
 	   void *ctx = state;
-	   ast_declaration *decl = new(ctx) ast_declaration($2, true, $4, true, $7, NULL);
+	   ast_declaration *decl = new(ctx) ast_declaration($2, true, $7, true, $4, NULL);
 
 	   if (state->ARB_geometry_shader4_enable &&
 	       $1->qualifier.flags.q.in &&
 	       $4->oper == ast_identifier &&
 	       strcmp($4->primary_expression.identifier, "gl_VerticesIn") == 0)
-	      decl->array_size = NULL;
+	      decl->outer_array_size = NULL;
 
 	   $$ = new(ctx) ast_declarator_list($1);
 	   $$->set_location(yylloc);

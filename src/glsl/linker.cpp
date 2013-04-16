@@ -224,57 +224,36 @@ public:
       if (!var->type->is_array() || var->mode != ir_var_shader_in)
          return visit_continue;
 
-      if (var->type->element_type()->is_array()) {
-         const int inner_size = var->type->element_type()->array_size();
+      int size = var->type->array_size();
 
-         /* Generate a link error if the shader has declared this array with
-          * a size larger than the correct size.
-          */
-         if (inner_size && inner_size != this->num_vertices) {
-            linker_error(this->prog, "inner size of array %s declared as %i, "
-                         "but number of input vertices is %i\n",
-                         var->name, inner_size, this->num_vertices);
-            this->error = true;
-            return visit_continue;
-         }
-
-         const glsl_type *inner_type = glsl_type::get_array_instance(
-               var->type->element_type()->element_type(),
-               this->num_vertices);
-         var->type = glsl_type::get_array_instance(inner_type,
-                                                   var->max_array_access+1);
-      } else {
-         int size = var->type->array_size();
-
-         /* Generate a link error if the shader has declared this array with
-          * a size larger than the correct size.  Ideally we would generate a
-          * link error for any size not equal to the correct size, but the
-          * array sizes are set to num_vertices-1 before we reach this stage.
-          */
-         if (size && size > this->num_vertices) {
-            linker_error(this->prog, "size of array %s declared as %i, "
-                         "but number of input vertices is %i\n",
-                         var->name, size, this->num_vertices);
-            this->error = true;
-            return visit_continue;
-         }
-
-         /* Generate a link error if the shader attempts to access an input
-          * array using an index too large for its actual size assigned at link
-          * time.
-          */
-         if (var->max_array_access >= this->num_vertices) {
-            linker_error(this->prog, "geometry shader accesses element %i of "
-                         "%s, but only %i input vertices\n",
-                         var->max_array_access, var->name, this->num_vertices);
-            this->error = true;
-            return visit_continue;
-         }
-
-         var->type = glsl_type::get_array_instance(var->type->element_type(),
-                                                   this->num_vertices);
-         var->max_array_access = this->num_vertices - 1;
+      /* Generate a link error if the shader has declared this array with
+       * a size larger than the correct size.  Ideally we would generate a
+       * link error for any size not equal to the correct size, but the
+       * array sizes are set to num_vertices-1 before we reach this stage.
+       */
+      if (size && size > this->num_vertices) {
+         linker_error(this->prog, "size of array %s declared as %i, "
+                      "but number of input vertices is %i\n",
+                      var->name, size, this->num_vertices);
+         this->error = true;
+         return visit_continue;
       }
+
+      /* Generate a link error if the shader attempts to access an input
+       * array using an index too large for its actual size assigned at link
+       * time.
+       */
+      if (var->max_array_access >= this->num_vertices) {
+         linker_error(this->prog, "geometry shader accesses element %i of "
+                      "%s, but only %i input vertices\n",
+                      var->max_array_access, var->name, this->num_vertices);
+         this->error = true;
+         return visit_continue;
+      }
+
+      var->type = glsl_type::get_array_instance(var->type->element_type(),
+                                                this->num_vertices);
+      var->max_array_access = this->num_vertices - 1;
 
       return visit_continue;
    }
