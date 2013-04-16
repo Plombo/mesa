@@ -1108,6 +1108,7 @@ private:
    };
 
    Value *getVertexBase(int s);
+   Value *getIndirectAddress(Value *ptr);
    DataArray *getArrayForFile(unsigned file, int idx);
    Value *fetchSrc(int s, int c);
    Value *acquireDst(int d, int c);
@@ -1323,9 +1324,12 @@ Converter::getVertexBase(int s)
       const int index = tgsi.getSrc(s).getIndex(1);
       Value *rel = NULL;
       if (tgsi.getSrc(s).isIndirect(1))
+      {
          rel = fetchSrc(tgsi.getSrc(s).getIndirect(1), 0, NULL);
+         rel = mkOp2v(OP_SHL, TYPE_U32, getSSA(2, FILE_ADDRESS), rel, mkImm(2));
+      }
       vtxBaseValid |= 1 << s;
-      vtxBase[s] = mkOp2v(OP_PFETCH, TYPE_U32, getSSA(), mkImm(index), rel);
+      vtxBase[s] = mkOp2v(OP_PFETCH, TYPE_U32, getSSA(2, FILE_ADDRESS), mkImm(index << 2), rel);
    }
    return vtxBase[s];
 }
@@ -1384,6 +1388,14 @@ Converter::getArrayForFile(unsigned file, int idx)
 }
 
 Value *
+Converter::getIndirectAddress(Value *ptr)
+{
+   if(!ptr)
+      return NULL;
+   return mkOp2v(OP_SHL, TYPE_U32, getSSA(2, FILE_ADDRESS), ptr, mkImm(4));
+}
+
+Value *
 Converter::fetchSrc(tgsi::Instruction::SrcRegister src, int c, Value *ptr)
 {
    const int idx2d = src.is2D() ? src.getIndex(1) : 0;
@@ -1395,7 +1407,7 @@ Converter::fetchSrc(tgsi::Instruction::SrcRegister src, int c, Value *ptr)
       assert(!ptr);
       return loadImm(NULL, info->immd.data[idx * 4 + swz]);
    case TGSI_FILE_CONSTANT:
-      return mkLoadv(TYPE_U32, srcToSym(src, c), ptr);
+      return mkLoadv(TYPE_U32, srcToSym(src, c), getIndirectAddress(ptr));
    case TGSI_FILE_INPUT:
       if (prog->getType() == Program::TYPE_FRAGMENT) {
          // don't load masked inputs, won't be assigned a slot
@@ -1403,9 +1415,25 @@ Converter::fetchSrc(tgsi::Instruction::SrcRegister src, int c, Value *ptr)
             return loadImm(NULL, swz == TGSI_SWIZZLE_W ? 1.0f : 0.0f);
 	 if (!ptr && info->in[idx].sn == TGSI_SEMANTIC_FACE)
             return mkOp1v(OP_RDSV, TYPE_F32, getSSA(), mkSysVal(SV_FACE, 0));
-         return interpolate(src, c, ptr);
+         return interpolate(src, c, getIndirectAddress(ptr));
       }
-      return mkLoadv(TYPE_U32, srcToSym(src, c), ptr);
+      else if (ptr && prog->getType() == Program::TYPE_GEOMETRY)
+      {
+         Symbol *sym = new_Symbol(prog, FILE_SYSTEM_VALUE);
+         sym->reg.fileIndex = 0;
+         sym->setSV(nv50_ir::SV_VERTEX_STRIDE, 0);
+         Value *vstride = mkOp1v(OP_RDSV, TYPE_U32, getSSA(), sym);
+         ptr = mkOp2v(OP_SHL, TYPE_U32, getSSA(), ptr, mkImm(2));
+
+         Value *a[2], *b[2];
+         mkSplit(a, 2, ptr);
+         mkSplit(b, 2, vstride);
+
+         //ptr = mkOp2v(OP_MUL, TYPE_U16, getSSA(), a[0], b[0]);
+         ptr = mkOp2v(OP_MUL, TYPE_U32, getSSA(), ptr, vstride);
+         return mkLoadv(TYPE_U32, srcToSym(src, c), ptr);
+      }
+      return mkLoadv(TYPE_U32, srcToSym(src, c), getIndirectAddress(ptr));
    case TGSI_FILE_OUTPUT:
       assert(!"load from output file");
       return NULL;
@@ -1414,7 +1442,7 @@ Converter::fetchSrc(tgsi::Instruction::SrcRegister src, int c, Value *ptr)
       return mkOp1v(OP_RDSV, TYPE_U32, getSSA(), srcToSym(src, c));
    default:
       return getArrayForFile(src.getFile(), idx2d)->load(
-         sub.cur->values, idx, swz, ptr);
+         sub.cur->values, idx, swz, getIndirectAddress(ptr));
    }
 }
 
@@ -1457,8 +1485,10 @@ Converter::storeDst(int d, int c, Value *val)
       break;
    }
 
-   Value *ptr = dst.isIndirect(0) ?
-      fetchSrc(dst.getIndirect(0), 0, NULL) : NULL;
+   Value *ptr = NULL;
+   if (dst.isIndirect(0))
+      ptr = mkOp2v(OP_SHL, TYPE_U32, getSSA(2, FILE_ADDRESS),
+                   fetchSrc(dst.getIndirect(0), 0, NULL), mkImm(4));
 
    if (info->io.genUserClip > 0 &&
        dst.getFile() == TGSI_FILE_OUTPUT &&
@@ -2156,12 +2186,11 @@ Converter::handleInstruction(const struct tgsi_full_instruction *insn)
       FOR_EACH_DST_ENABLED_CHANNEL(0, c, tgsi) {
          src0 = fetchSrc(0, c);
          mkCvt(OP_CVT, TYPE_S32, dst0[c], TYPE_F32, src0)->rnd = ROUND_M;
-         mkOp2(OP_SHL, TYPE_U32, dst0[c], dst0[c], mkImm(4));
       }
       break;
    case TGSI_OPCODE_UARL:
       FOR_EACH_DST_ENABLED_CHANNEL(0, c, tgsi)
-         mkOp2(OP_SHL, TYPE_U32, dst0[c], fetchSrc(0, c), mkImm(4));
+         mkOp1(OP_MOV, TYPE_U32, dst0[c], fetchSrc(0, c));
       break;
    case TGSI_OPCODE_EX2:
    case TGSI_OPCODE_LG2:
@@ -2687,7 +2716,7 @@ Converter::Converter(Program *ir, const tgsi::Source *code) : BuildUtil(ir),
 
    tData.setup(TGSI_FILE_TEMPORARY, 0, 0, tSize, 4, 4, tFile, 0);
    pData.setup(TGSI_FILE_PREDICATE, 0, 0, pSize, 4, 4, FILE_PREDICATE, 0);
-   aData.setup(TGSI_FILE_ADDRESS, 0, 0, aSize, 4, 4, FILE_ADDRESS, 0);
+   aData.setup(TGSI_FILE_ADDRESS, 0, 0, aSize, 4, 4, FILE_GPR, 0);
    oData.setup(TGSI_FILE_OUTPUT, 0, 0, oSize, 4, 4, FILE_GPR, 0);
 
    zero = mkImm((uint32_t)0);
