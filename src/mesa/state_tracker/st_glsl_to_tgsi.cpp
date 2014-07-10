@@ -49,8 +49,6 @@
 extern "C" {
 #include "main/shaderapi.h"
 #include "program/prog_instruction.h"
-#include "program/prog_optimize.h"
-#include "program/prog_print.h"
 #include "program/program.h"
 #include "program/prog_parameter.h"
 #include "program/sampler.h"
