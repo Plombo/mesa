@@ -28,7 +28,8 @@ include $(top_srcdir)/src/gallium/Automake.inc
 AM_CPPFLAGS = \
 	$(GALLIUM_DRIVER_CFLAGS) \
 	$(LIBDRM_CFLAGS) \
-	$(NOUVEAU_CFLAGS)
+	$(NOUVEAU_CFLAGS) \
+	$(LLVM_CFLAGS)
 
 noinst_LTLIBRARIES = libnouveau.la
 
@@ -44,9 +45,16 @@ noinst_PROGRAMS = nouveau_compiler
 
 nodist_EXTRA_nouveau_compiler_SOURCES = dummy.cpp
 nouveau_compiler_SOURCES = \
-	nouveau_compiler.c
+	nouveau_compiler.c \
+	nouveau_llvm.c \
+	nouveau_setup_tgsi_llvm.c \
+	$(LLVM_C_FILES)
 
 nouveau_compiler_LDADD = \
 	libnouveau.la \
 	../../auxiliary/libgallium.la \
-	$(GALLIUM_COMMON_LIB_DEPS)
+	$(GALLIUM_COMMON_LIB_DEPS) \
+	$(LLVM_LIBS)
+
+nouveau_compiler_LDFLAGS = \
+	$(LLVM_LDFLAGS)

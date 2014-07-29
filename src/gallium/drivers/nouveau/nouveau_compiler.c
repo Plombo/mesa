@@ -28,6 +28,8 @@
 #include "codegen/nv50_ir_driver.h"
 #include "nv50/nv50_context.h"
 
+#include "nouveau_llvm.h"
+
 /* these headers weren't really meant to be included together */
 #undef SB_DATA
 
@@ -123,7 +125,7 @@ nouveau_codegen(int chipset, int type, struct tgsi_token tokens[],
    info.assignSlots = dummy_assign_slots;
 
    info.optLevel = debug_get_num_option("NV50_PROG_OPTIMIZE", 3);
-   info.dbgFlags = debug_get_num_option("NV50_PROG_DEBUG", 0);
+   info.dbgFlags = debug_get_num_option("NV50_PROG_DEBUG", 1);
 
    ret = nv50_ir_generate_code(&info);
    if (ret) {
@@ -145,6 +147,8 @@ main(int argc, char *argv[])
    FILE *f;
    char text[65536] = {0};
    unsigned size, *code;
+   struct nouveau_llvm_context ctx;
+   
 
    for (i = 1; i < argc; i++) {
       if (!strcmp(argv[i], "-a"))
@@ -217,6 +221,8 @@ main(int argc, char *argv[])
    }
    if (i % (8 * 4) != 0)
       printf("\n");
+
+   LLVMDumpModule(nouveau_tgsi_llvm(tokens));
 
    return 0;
 }

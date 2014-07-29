@@ -3796,7 +3796,7 @@ lp_build_tgsi_soa(struct gallivm_state *gallivm,
       debug_printf("2222222222222222222222222222 \n");
    }
 
-   if (0) {
+   if (1) {
       LLVMModuleRef module = LLVMGetGlobalParent(
          LLVMGetBasicBlockParent(LLVMGetInsertBlock(gallivm->builder)));
       LLVMDumpModule(module);
