@@ -313,6 +313,11 @@ public:
    st_src_reg return_reg;
 };
 
+struct live_interval {
+   int first_write;
+   int last_read;
+};
+
 struct glsl_to_tgsi_visitor : public ir_visitor {
 public:
    glsl_to_tgsi_visitor();
@@ -456,6 +461,7 @@ public:
    int get_first_temp_write(int index);
    int get_last_temp_read(int index);
    int get_last_temp_write(int index);
+   live_interval *get_live_intervals(void);
 
    void copy_propagate(void);
    int eliminate_dead_code(void);
@@ -3898,6 +3904,142 @@ glsl_to_tgsi_visitor::eliminate_dead_code(void)
    return removed;
 }
 
+static void
+update_live_interval(live_interval &interval,
+                     int potential_start,
+                     int potential_end)
+{
+   if (!potential_start)
+      return;
+
+   if (interval.first_write == -1)
+      interval.first_write = potential_start;
+   interval.first_write = MIN2(interval.first_write, potential_start);
+   interval.last_read = MAX2(interval.last_read, potential_end);
+   return;
+}
+
+static void
+get_live_interval_from_loop_block(int temp_amounts,
+                                  live_interval *intervals,
+                                  int &inst_index,
+                                  glsl_to_tgsi_instruction *&current_instruction)
+{
+   int block_start = inst_index;
+
+   void *ctx = ralloc_context(NULL);
+
+   int *first_write = rzalloc_array(ctx, int, temp_amounts);
+   int *first_read = rzalloc_array(ctx, int, temp_amounts);
+   int *last_write = rzalloc_array(ctx, int, temp_amounts);
+   int *last_read = rzalloc_array(ctx, int, temp_amounts);
+
+   while (current_instruction && !current_instruction->is_tail_sentinel()) {
+      glsl_to_tgsi_instruction *inst = current_instruction;
+
+      if (inst->dst.file == PROGRAM_TEMPORARY) {
+         int index = inst->dst.index;
+         if (index >= 0) {
+            if (!first_write[index])
+               first_write[index] = inst_index;
+            last_write[index] = inst_index;
+         }
+      }
+
+      for (unsigned j=0; j < num_inst_src_regs(inst->op); j++) {
+         if (inst->src[j].file == PROGRAM_TEMPORARY) {
+            int index = inst->src[j].index;
+            if (index >= 0) {
+               if (!first_read[index])
+                  first_read[index] = inst_index;
+               last_read[index] = inst_index;
+            }
+         }
+      }
+
+      for (unsigned j=0; j < inst->tex_offset_num_offset; j++) {
+         if (inst->tex_offsets[j].file == PROGRAM_TEMPORARY) {
+            int index = inst->tex_offsets[j].index;
+            if (index >= 0) {
+               if (!first_read[index])
+                  first_read[index] = inst_index;
+               last_read[index] = inst_index;
+            }
+         }
+      }
+
+      if (current_instruction->op == TGSI_OPCODE_ENDLOOP)
+         break;
+
+      current_instruction = (glsl_to_tgsi_instruction *) current_instruction->get_next();
+      inst_index++;
+
+      if (inst->op == TGSI_OPCODE_BGNLOOP) {
+         get_live_interval_from_loop_block(temp_amounts, intervals, inst_index, current_instruction);
+      }
+   }
+
+   int block_end = inst_index;
+
+   for (int i = 0; i < temp_amounts; i++) {
+      if (first_read[i] && first_write[i]) {
+         if (first_read[i] <= first_write[i]) {
+            update_live_interval(intervals[i], block_start, block_end);
+         }
+         else {
+            update_live_interval(intervals[i], first_write[i], last_read[i]);
+         }
+         continue;
+      } else if (first_write[i]) {
+         fprintf(stderr, "Loop index %i[3]: first=%i\n", i, first_write[i]);
+         update_live_interval(intervals[i], first_write[i], -1);
+      } else if (first_read[i]) {
+         fprintf(stderr, "Loop index %i[4]: first=%i, last=%i\n", i, -1, block_end);
+         update_live_interval(intervals[i], block_start, block_end);
+      }
+   }
+
+   ralloc_free(ctx);
+   return;
+}
+
+live_interval *
+glsl_to_tgsi_visitor::get_live_intervals(void)
+{
+   int inst_index = 0;
+   live_interval *intervals = rzalloc_array(this->mem_ctx,
+                                            live_interval,
+                                            this->next_temp);
+
+   /* Initialize each interval to [-1, -1] indicating no use */
+   memset(intervals, 0xff, sizeof(live_interval) * this->next_temp);
+
+   foreach_in_list(glsl_to_tgsi_instruction, inst, &this->instructions) {
+      if (inst->dst.file == PROGRAM_TEMPORARY &&
+          intervals[inst->dst.index].first_write == -1)
+         intervals[inst->dst.index].first_write = inst_index;
+
+      for (unsigned j=0; j < num_inst_src_regs(inst->op); j++) {
+         if (inst->src[j].file == PROGRAM_TEMPORARY)
+            intervals[inst->src[j].index].last_read = inst_index;
+      }
+      for (unsigned j=0; j < inst->tex_offset_num_offset; j++) {
+          if (inst->tex_offsets[j].file == PROGRAM_TEMPORARY)
+             intervals[inst->tex_offsets[j].index].last_read = inst_index;
+      }
+
+      if (inst->op == TGSI_OPCODE_BGNLOOP)
+         get_live_interval_from_loop_block(this->next_temp,
+                                           intervals,
+                                           inst_index,
+                                           inst);
+
+      inst_index++;
+   }
+
+   return intervals;
+}
+
 /* Merges temporary registers together where possible to reduce the number of 
  * registers needed to run a program.
  * 
@@ -3906,49 +4048,38 @@ glsl_to_tgsi_visitor::eliminate_dead_code(void)
 void
 glsl_to_tgsi_visitor::merge_registers(void)
 {
-   int *last_reads = rzalloc_array(mem_ctx, int, this->next_temp);
-   int *first_writes = rzalloc_array(mem_ctx, int, this->next_temp);
+   live_interval *intervals = get_live_intervals();
    int i, j;
-   
-   /* Read the indices of the last read and first write to each temp register
-    * into an array so that we don't have to traverse the instruction list as 
-    * much. */
-   for (i=0; i < this->next_temp; i++) {
-      last_reads[i] = get_last_temp_read(i);
-      first_writes[i] = get_first_temp_write(i);
-   }
    
    /* Start looking for registers with non-overlapping usages that can be 
     * merged together. */
    for (i=0; i < this->next_temp; i++) {
       /* Don't touch unused registers. */
-      if (last_reads[i] < 0 || first_writes[i] < 0) continue;
+      if (intervals[i].last_read < 0 || intervals[i].first_write < 0) continue;
       
       for (j=0; j < this->next_temp; j++) {
          /* Don't touch unused registers. */
-         if (last_reads[j] < 0 || first_writes[j] < 0) continue;
+         if (intervals[j].last_read < 0 || intervals[j].first_write < 0) continue;
          
          /* We can merge the two registers if the first write to j is after or 
           * in the same instruction as the last read from i.  Note that the 
           * register at index i will always be used earlier or at the same time 
           * as the register at index j. */
-         if (first_writes[i] <= first_writes[j] && 
-             last_reads[i] <= first_writes[j])
-         {
+         if (intervals[i].first_write <= intervals[j].first_write &&
+             intervals[i].last_read <= intervals[j].first_write) {
             rename_temp_register(j, i); /* Replace all references to j with i.*/
             
             /* Update the first_writes and last_reads arrays with the new 
              * values for the merged register index, and mark the newly unused 
              * register index as such. */
-            last_reads[i] = last_reads[j];
-            first_writes[j] = -1;
-            last_reads[j] = -1;
+            intervals[i].last_read = intervals[j].last_read;
+            intervals[j].first_write = -1;
+            intervals[j].last_read = -1;
          }
       }
    }
    
-   ralloc_free(last_reads);
-   ralloc_free(first_writes);
+   ralloc_free(intervals);
 }
 
 /* Reassign indices to temporary registers by reusing unused indices created 
@@ -5281,15 +5412,17 @@ get_mesa_program(struct gl_context *ctx,
 #if 0
    /* Print out some information (for debugging purposes) used by the 
     * optimization passes. */
-   for (i=0; i < v->next_temp; i++) {
+   live_interval *intervals = v->get_live_intervals();
+   for (int i=0; i < v->next_temp; i++) {
       int fr = v->get_first_temp_read(i);
       int fw = v->get_first_temp_write(i);
       int lr = v->get_last_temp_read(i);
       int lw = v->get_last_temp_write(i);
       
-      printf("Temp %d: FR=%3d FW=%3d LR=%3d LW=%3d\n", i, fr, fw, lr, lw);
-      assert(fw <= fr);
+      fprintf(stderr, "Temp %d: FR=%3d FW=%3d/%3d LR=%3d/%d LW=%3d\n", i, fr, fw, intervals[i].first_write, lr, intervals[i].last_read, lw);
+      if(intervals[i].last_read != -1) assert(intervals[i].first_write <= intervals[i].last_read);
    }
+   ralloc_free(intervals);
 #endif
 
    /* Perform optimizations on the instructions in the glsl_to_tgsi_visitor. */
